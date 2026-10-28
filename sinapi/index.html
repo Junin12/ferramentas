@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Consulta SINAPI</title>
+<meta name="description" content="Pesquise composições e insumos da SINAPI e monte um orçamento rápido, direto no celular.">
+<meta name="theme-color" content="#9C5A1C">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icon-192.png">
+<link rel="stylesheet" href="../comum/base.css">
+<style>
+:root{--brand:#9C5A1C}
+.res li{cursor:default}
+.res .preco{font-weight:700;white-space:nowrap}
+.res .cod{font-family:ui-monospace,Consolas,monospace;color:var(--muted)}
+.orc input{width:5.5em;font:inherit;border:1px solid var(--line);border-radius:8px;padding:6px;background:var(--panel);color:var(--ink)}
+.total{font-size:20px;font-weight:700;text-align:right}
+.base{display:flex;gap:8px;flex-wrap:wrap}
+.chip{border:1px solid var(--line);border-radius:999px;padding:3px 10px;font-size:13px}
+</style>
+</head>
+<body>
+<header class="topo"><div class="in"><a class="voltar" href="../?g=obra">‹ Obra</a><h1>Consulta SINAPI</h1></div></header>
+<main class="wrap">
+  <p class="sub">Importe a planilha da SINAPI baixada no site da Caixa (composições ou insumos, do seu estado). Ela fica guardada neste aparelho e a busca funciona sem internet.</p>
+  <section class="card">
+    <h2>Base de preços</h2>
+    <div class="base" id="bases"></div>
+    <div class="drop" id="drop">
+      <p>Arraste a planilha (.xlsx) aqui ou</p>
+      <label class="btn pri" for="arq">Importar planilha da SINAPI</label>
+      <input class="sr" id="arq" type="file" accept=".xlsx,.xls,.csv" multiple>
+    </div>
+    <label class="campo hide" id="c-uf">Estado (a planilha tem colunas de vários estados)<select id="uf"></select></label>
+    <p class="info">Em caixa.gov.br › SINAPI › Downloads: escolha o mês e o estado (MG) e baixe “Composições” e “Insumos”. Use desonerado ou não desonerado conforme o contrato.</p>
+  </section>
+  <section class="card hide" id="sec-busca">
+    <label class="campo">Pesquisar (palavras ou código)<input id="q" type="search" placeholder="Ex.: tubo pvc 100, escavação mecanizada, 92873" autocomplete="off"></label>
+    <p class="info" id="q-info"></p>
+    <ul class="lista res" id="res"></ul>
+  </section>
+  <section class="card hide" id="sec-orc">
+    <h2>Orçamento rápido</h2>
+    <ul class="lista orc" id="orc"></ul>
+    <p class="total" id="total"></p>
+  </section>
+</main>
+<div class="acao"><div class="in">
+  <button type="button" id="limpar" disabled>Limpar orçamento</button>
+  <button type="button" class="pri" id="csv" disabled>Orçamento (CSV)</button>
+</div></div>
+<div id="status" role="status" aria-live="polite"></div>
+
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" crossorigin="anonymous"></script>
+<script src="../comum/base.js"></script>
+<script>
+'use strict';
+// ---------- armazenamento (IndexedDB: a base tem dezenas de milhares de linhas) ----------
+const BD = (() => {
+  let db = null;
+  const abrir = () => db ? Promise.resolve(db) : new Promise((ok, erro) => { const r = indexedDB.open('sinapi', 1); r.onupgradeneeded = () => r.result.createObjectStore('bases'); r.onsuccess = () => ok(db = r.result); r.onerror = () => erro(r.error); });
+  const tx = async (modo, fn) => { const d = await abrir(); return new Promise((ok, erro) => { const t = d.transaction('bases', modo), s = t.objectStore('bases'), r = fn(s); t.oncomplete = () => ok(r?.result); t.onerror = () => erro(t.error); }); };
+  return { put: (k, v) => tx('readwrite', (s) => s.put(v, k)), del: (k) => tx('readwrite', (s) => s.delete(k)), todas: () => tx('readonly', (s) => s.getAll()) };
+})();
+let bases = [], itens = [];
+const orc = (() => { try { return JSON.parse(localStorage.getItem('sinapi-orc')) || []; } catch (e) { return []; } })();
+const gravarOrc = () => { try { localStorage.setItem('sinapi-orc', JSON.stringify(orc)); } catch (e) { /* segue */ } };
+const norm = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/\s+/g, ' ').trim();
+const R$ = (v) => (+v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const UFS = 'AC AL AM AP BA CE DF ES GO MA MG MS MT PA PB PE PI PR RJ RN RO RR RS SC SE SP TO'.split(' ');
+
+// ---------- leitura da planilha ----------
+// A Caixa muda o leiaute de tempos em tempos: em vez de posições fixas, acha a linha de cabeçalho
+// (a que tem CÓDIGO e DESCRIÇÃO) e as colunas de unidade e de preço (CUSTO/PREÇO ou a sigla do estado).
+function lerPlanilha(wb, nomeArq) {
+  const out = []; let ufs = new Set();
+  for (const nome of wb.SheetNames) {
+    const L = XLSX.utils.sheet_to_json(wb.Sheets[nome], { header: 1, raw: true, defval: '' });
+    const hi = L.slice(0, 40).findIndex((l) => { const t = l.map(norm); return t.some((c) => /CODIGO/.test(c)) && t.some((c) => /DESCRICAO/.test(c)); });
+    if (hi < 0) continue;
+    const cab = L[hi].map(norm), cab2 = (L[hi + 1] || []).map(norm);
+    const col = (re, desde = 0) => cab.findIndex((c, i) => i >= desde && re.test(c));
+    const cCod = col(/CODIGO( DA)? ?(COMPOSICAO|ITEM|INSUMO)|^CODIGO$/) >= 0 ? col(/CODIGO( DA)? ?(COMPOSICAO|ITEM|INSUMO)|^CODIGO$/) : col(/CODIGO/);
+    const cDesc = col(/DESCRICAO/), cUn = col(/^UNIDADE|^UND|^UN$|UNIDADE DE MEDIDA/);
+    // colunas de preço por estado (cabeçalho = sigla do estado, às vezes na linha de baixo)
+    const porUf = {}; cab.forEach((c, i) => { if (UFS.includes(c)) porUf[c] = i; }); cab2.forEach((c, i) => { if (UFS.includes(c) && porUf[c] == null) porUf[c] = i; });
+    let cPreco = col(/CUSTO TOTAL|PRECO MEDIANO|CUSTO \(R\$\)|PRECO|CUSTO/, cDesc + 1);
+    const tipo = /INSUMO|ISD|ICD/i.test(nome + nomeArq) && !/COMPOSI|CSD|CCD/i.test(nome) ? 'Insumo' : 'Composição';
+    for (const l of L.slice(hi + 1)) {
+      const cod = String(l[cCod] ?? '').trim(), desc = String(l[cDesc] ?? '').trim();
+      if (!/^\d{3,}/.test(cod) || desc.length < 4) continue;
+      const it = { c: cod, d: desc, u: cUn >= 0 ? String(l[cUn] ?? '').trim() : '', t: tipo };
+      if (Object.keys(porUf).length) { it.pu = {}; for (const [uf, i] of Object.entries(porUf)) { const v = numero(l[i]); if (v != null) { it.pu[uf] = v; ufs.add(uf); } } }
+      else { const v = numero(l[cPreco]); if (v == null) continue; it.p = v; }
+      out.push(it);
+    }
+  }
+  return { itens: out, ufs: [...ufs] };
+}
+function numero(v) {
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  const s = String(v ?? '').trim(); if (!s) return null;
+  const n = parseFloat(/,/.test(s) ? s.replace(/\./g, '').replace(',', '.') : s); return Number.isFinite(n) ? n : null;
+}
+// mês e estado pelo nome do arquivo da Caixa (ex.: SINAPI_Custo_Ref_Composicoes_Sintetico_MG_202609_NaoDesonerado.xlsx)
+function infoArq(n) {
+  const m = n.match(/(20\d{2})[_\-.]?(0[1-9]|1[0-2])(?!\d)/), uf = (n.toUpperCase().match(/[_\- ]([A-Z]{2})[_\- ]/) || [])[1];
+  return { mes: m ? `${m[2]}/${m[1]}` : '', uf: UFS.includes(uf) ? uf : '', des: /nao.?deson|não.?deson/i.test(n) ? 'não desonerado' : /deson/i.test(n) ? 'desonerado' : '' };
+}
+F.entrada(F.$('#drop'), F.$('#arq'), (fs) => F.trabalhando(F.$('#drop').querySelector('.btn') || F.$('#arq'), async () => {
+  if (!F.libs('XLSX')) return;
+  for (const f of fs) {
+    F.toast(`Lendo ${f.name}…`);
+    try {
+      const wb = XLSX.read(await f.arrayBuffer(), { type: 'array', dense: true });
+      const { itens: L, ufs } = lerPlanilha(wb, f.name);
+      if (!L.length) { F.toast(`Não achei códigos e preços em “${f.name}”. É a planilha de preços da SINAPI?`, true); continue; }
+      const b = { id: `${Date.now()}`, arq: f.name, ...infoArq(f.name), ufs, n: L.length, itens: L };
+      await BD.put(b.id, b); F.toast(`${L.length.toLocaleString('pt-BR')} itens importados de ${f.name}.`);
+    } catch (e) { console.error(e); F.toast(`Não consegui ler “${f.name}”.`, true); }
+  }
+  await carregar();
+}));
+async function carregar() {
+  bases = (await BD.todas().catch(() => [])) || [];
+  const ufs = [...new Set(bases.flatMap((b) => b.ufs || []))].sort();
+  F.$('#c-uf').classList.toggle('hide', !ufs.length);
+  if (ufs.length) { const atual = localStorage.getItem('sinapi-uf') || 'MG'; F.$('#uf').replaceChildren(...ufs.map((u) => { const o = document.createElement('option'); o.value = o.textContent = u; o.selected = u === atual; return o; })); }
+  itens = bases.flatMap((b) => b.itens.map((it) => ({ ...it, b })));
+  F.$('#bases').replaceChildren(...bases.map((b) => { const s = document.createElement('span'); s.className = 'chip';
+    s.textContent = `${b.itens[0]?.t === 'Insumo' ? 'Insumos' : 'Composições'} ${[b.uf, b.mes, b.des].filter(Boolean).join(' · ')} · ${b.n.toLocaleString('pt-BR')} itens `;
+    const x = document.createElement('button'); x.type = 'button'; x.className = 'mini'; x.textContent = '✕'; x.setAttribute('aria-label', 'Apagar esta base'); x.onclick = async () => { if (confirm(`Apagar a base ${b.arq} deste aparelho?`)) { await BD.del(b.id); carregar(); } };
+    s.append(x); return s; }));
+  F.$('#sec-busca').classList.toggle('hide', !itens.length);
+  buscar(); desenharOrc();
+}
+F.$('#uf').addEventListener('change', (e) => { try { localStorage.setItem('sinapi-uf', e.target.value); } catch (x) { /* segue */ } buscar(); desenharOrc(); });
+const preco = (it) => it.pu ? it.pu[F.$('#uf').value] ?? null : it.p;
+// rótulo da base de um item (mês e estado) para o orçamento
+const fonte = (it) => [it.b?.uf || (it.pu ? F.$('#uf').value : ''), it.b?.mes, it.b?.des].filter(Boolean).join(' ');
+
+// ---------- busca ----------
+let tBusca = 0;
+F.$('#q').addEventListener('input', () => { clearTimeout(tBusca); tBusca = setTimeout(buscar, 200); });
+function buscar() {
+  const q = norm(F.$('#q').value), lista = F.$('#res');
+  if (q.length < 2) { lista.replaceChildren(); F.$('#q-info').textContent = itens.length ? `${itens.length.toLocaleString('pt-BR')} itens na base. Digite para pesquisar.` : ''; return; }
+  const ws = q.split(' ').filter(Boolean), achados = [];
+  for (const it of itens) {
+    if (/^\d+$/.test(q) ? it.c.startsWith(q) : ws.every((w) => (it._n ??= norm(it.d)).includes(w))) achados.push(it);
+    if (achados.length >= 200) break;
+  }
+  F.$('#q-info').textContent = achados.length ? `${achados.length >= 200 ? 'Mais de 200' : achados.length} resultado${achados.length > 1 ? 's' : ''}${achados.length >= 200 ? ': escreva mais palavras' : ''}.` : 'Nada encontrado.';
+  lista.replaceChildren(...achados.map((it) => {
+    const li = document.createElement('li'); li.className = 'item';
+    li.innerHTML = '<div class="nm"><small class="cod"></small><span class="d"></span><small class="u"></small></div><span class="preco"></span><button type="button" class="mini" aria-label="Pôr no orçamento">＋</button>';
+    li.querySelector('.cod').textContent = `${it.t} ${it.c}`; li.querySelector('.d').textContent = it.d; li.querySelector('.u').textContent = ` · ${it.u}`;
+    const p = preco(it); li.querySelector('.preco').textContent = p == null ? '–' : R$(p);
+    li.querySelector('button').onclick = () => { orc.push({ c: it.c, d: it.d, u: it.u, t: it.t, p: p ?? 0, q: 1, f: fonte(it) }); gravarOrc(); desenharOrc(); F.toast('Item no orçamento.'); };
+    return li;
+  }));
+}
+
+// ---------- orçamento ----------
+function desenharOrc() {
+  F.$('#sec-orc').classList.toggle('hide', !orc.length); F.$('#csv').disabled = F.$('#limpar').disabled = !orc.length;
+  F.$('#orc').replaceChildren(...orc.map((x, k) => {
+    const li = document.createElement('li'); li.className = 'item';
+    li.innerHTML = '<div class="nm"><small class="cod"></small><span class="d"></span><small class="s"></small></div><input type="text" inputmode="decimal" aria-label="Quantidade"><button type="button" class="mini" aria-label="Tirar">✕</button>';
+    li.querySelector('.cod').textContent = `${x.c} · ${x.u}`; li.querySelector('.d').textContent = x.d;
+    const sub = () => (li.querySelector('.s').textContent = ` · ${R$(x.p)} × ${x.q.toLocaleString('pt-BR')} = ${R$(x.p * x.q)}`);
+    const i = li.querySelector('input'); i.value = String(x.q).replace('.', ',');
+    i.oninput = () => { x.q = numero(i.value) || 0; sub(); gravarOrc(); total(); };
+    li.querySelector('button').onclick = () => { orc.splice(k, 1); gravarOrc(); desenharOrc(); };
+    sub(); return li;
+  }));
+  total();
+}
+const total = () => (F.$('#total').textContent = `Total: ${R$(orc.reduce((s, x) => s + x.p * x.q, 0))}`);
+F.$('#limpar').addEventListener('click', () => { if (confirm('Limpar o orçamento?')) { orc.length = 0; gravarOrc(); desenharOrc(); } });
+F.$('#csv').addEventListener('click', () => {
+  const n = (v, d = 2) => (+v || 0).toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
+  const l = [['Código', 'Tipo', 'Descrição', 'Unidade', 'Quantidade', 'Preço unitário (R$)', 'Total (R$)', 'Base'], ...orc.map((x) => [x.c, x.t, `"${x.d.replace(/"/g, '""')}"`, x.u, n(x.q, 3), n(x.p), n(x.p * x.q), x.f]),
+    ['', '', 'TOTAL', '', '', '', n(orc.reduce((s, x) => s + x.p * x.q, 0)), '']];
+  F.baixar(new Blob(['﻿' + l.map((x) => x.join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' }), `Orcamento_SINAPI_${new Date().toISOString().slice(0, 10)}.csv`);
+});
+carregar();
+</script>
+</body>
+</html>

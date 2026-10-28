@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Antes e depois</title>
+<meta name="description" content="Junte duas fotos lado a lado com ANTES e DEPOIS, título e data, numa imagem só.">
+<meta name="theme-color" content="#A8305C">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icon-192.png">
+<link rel="stylesheet" href="../comum/base.css">
+<style>
+:root{--brand:#A8305C}
+.duas{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.slot{display:grid;gap:6px;justify-items:center;border:2px dashed var(--line);border-radius:12px;padding:10px;text-align:center;min-height:120px;align-content:center}
+.slot img{max-width:100%;max-height:160px;border-radius:8px}
+.grade2{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+#previa{width:100%;height:auto;border-radius:10px;background:#fff}
+</style>
+</head>
+<body>
+<header class="topo"><div class="in"><a class="voltar" href="../?g=foto">‹ Fotos</a><h1>Antes e depois</h1></div></header>
+<main class="wrap">
+  <p class="sub">Escolha as duas fotos: o app junta numa imagem só, com as etiquetas e o título. Bom para relatório, medição e WhatsApp.</p>
+  <div class="duas">
+    <label class="slot" id="s0"><span>📷 Foto de ANTES</span><input class="sr" type="file" accept="image/*" data-i="0"></label>
+    <label class="slot" id="s1"><span>📷 Foto de DEPOIS</span><input class="sr" type="file" accept="image/*" data-i="1"></label>
+  </div>
+  <section class="card">
+    <div class="grade2">
+      <label class="campo">Título (opcional)<input id="titulo" type="text" maxlength="80" placeholder="Ex.: Recomposição do pavimento · Rua 3"></label>
+      <label class="campo">Rótulo da 1ª<input id="r0" type="text" maxlength="20" value="ANTES"></label>
+      <label class="campo">Rótulo da 2ª<input id="r1" type="text" maxlength="20" value="DEPOIS"></label>
+      <label class="campo">Montagem
+        <select id="lay"><option value="lado">Lado a lado</option><option value="cima">Uma em cima da outra</option></select>
+      </label>
+    </div>
+    <div class="opcoes"><label><input type="checkbox" id="datas" checked> <span>Pôr a data de cada foto</span></label></div>
+  </section>
+  <canvas id="previa" class="hide" aria-label="Prévia da montagem"></canvas>
+</main>
+<div class="acao"><div class="in">
+  <button type="button" id="trocar" disabled>⇄ Trocar</button>
+  <button type="button" class="pri" id="baixar" disabled>Baixar imagem</button>
+</div></div>
+<div id="status" role="status" aria-live="polite"></div>
+<script src="../comum/base.js"></script>
+<script>
+'use strict';
+const fotos = [null, null]; // {bmp, data}
+document.querySelectorAll('input[type=file]').forEach((i) => i.addEventListener('change', async () => {
+  const f = i.files[0], k = +i.dataset.i; i.value = ''; if (!f) return;
+  try {
+    const bmp = await createImageBitmap(f);
+    fotos[k] = { bmp, data: new Date(f.lastModified || Date.now()), url: URL.createObjectURL(f) };
+    const s = F.$('#s' + k); s.querySelector('img')?.remove(); const im = document.createElement('img'); im.src = fotos[k].url; im.alt = ''; s.prepend(im);
+    montar();
+  } catch (e) { F.toast('Não consegui abrir a foto.', true); }
+}));
+// cada foto recortada no mesmo formato (cobre a moldura), para as duas ficarem do mesmo tamanho
+function cobrir(g, bmp, x, y, w, h) {
+  const k = Math.max(w / bmp.width, h / bmp.height), sw = w / k, sh = h / k;
+  g.drawImage(bmp, (bmp.width - sw) / 2, (bmp.height - sh) / 2, sw, sh, x, y, w, h);
+}
+function montar() {
+  const ok = fotos[0] && fotos[1]; F.$('#baixar').disabled = F.$('#trocar').disabled = !ok; F.$('#previa').classList.toggle('hide', !ok);
+  if (!ok) return;
+  const lado = F.$('#lay').value === 'lado', W = 2000, gap = 12, tit = F.$('#titulo').value.trim(), th = tit ? 110 : 0;
+  // proporção da 1ª foto define o formato das duas (limitada para não ficar estreita demais)
+  const ar = Math.min(1.8, Math.max(0.6, fotos[0].bmp.width / fotos[0].bmp.height));
+  const fw = lado ? (W - gap) / 2 : W, fh = fw / ar, H = th + (lado ? fh : fh * 2 + gap);
+  const c = F.$('#previa'); c.width = W; c.height = Math.round(H); const g = c.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+  if (tit) { g.fillStyle = '#111'; g.font = 'bold 56px sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(tit, W / 2, th / 2, W - 60); }
+  fotos.forEach((f, k) => {
+    const x = lado ? k * (fw + gap) : 0, y = th + (lado ? 0 : k * (fh + gap));
+    cobrir(g, f.bmp, x, y, fw, fh);
+    // etiqueta no canto e data embaixo
+    const rot = F.$('#r' + k).value.trim(), s = Math.round(fw / 16);
+    if (rot) { g.font = `bold ${s}px sans-serif`; const tw = g.measureText(rot).width; g.fillStyle = k ? '#1E8E3E' : '#C62828'; g.fillRect(x + s * 0.5, y + s * 0.5, tw + s, s * 1.5); g.fillStyle = '#fff'; g.textAlign = 'left'; g.textBaseline = 'middle'; g.fillText(rot, x + s, y + s * 1.25); }
+    if (F.$('#datas').checked) { const t = f.data.toLocaleDateString('pt-BR'); g.font = `bold ${Math.round(s * 0.6)}px sans-serif`; g.textAlign = 'right'; g.textBaseline = 'alphabetic';
+      g.lineWidth = s * 0.15; g.strokeStyle = 'rgba(0,0,0,.8)'; g.strokeText(t, x + fw - s * 0.5, y + fh - s * 0.5); g.fillStyle = '#fff'; g.fillText(t, x + fw - s * 0.5, y + fh - s * 0.5); }
+  });
+}
+['titulo', 'r0', 'r1'].forEach((id) => F.$('#' + id).addEventListener('input', montar));
+['lay', 'datas'].forEach((id) => F.$('#' + id).addEventListener('change', montar));
+F.$('#trocar').addEventListener('click', () => { fotos.reverse(); [0, 1].forEach((k) => { const s = F.$('#s' + k); s.querySelector('img')?.remove(); const im = document.createElement('img'); im.src = fotos[k].url; im.alt = ''; s.prepend(im); }); montar(); });
+F.$('#baixar').addEventListener('click', async () => {
+  const nome = 'Antes_depois_' + (F.$('#titulo').value.trim() || new Date().toISOString().slice(0, 10)).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\W+/g, '_').slice(0, 50);
+  F.baixar(await F.jpeg(F.$('#previa'), 0.85), nome + '.jpg');
+});
+</script>
+</body>
+</html>

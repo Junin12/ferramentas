@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Buscar nas normas</title>
+<meta name="description" content="Busca em todos os cards das normas de uma vez, com os seus favoritos.">
+<meta name="theme-color" content="#2F5D62">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icon-192.png">
+<link rel="stylesheet" href="../comum/base.css">
+<link rel="stylesheet" href="../comum/normas.css">
+</head>
+<body data-busca>
+<header class="topo"><div class="in"><a class="voltar" href="../?g=normas">‹ Normas</a><h1>Buscar nas normas</h1></div></header>
+<main class="wrap">
+  <div class="filtros"><input id="q" type="search" placeholder="Ex.: cobrimento, escoramento, slump, rampa…" aria-label="Buscar em todas as normas" autofocus></div>
+  <p class="aviso" id="info">Carregando as normas…</p>
+  <h2 class="secao-tit" id="tit-fav" hidden>★ Favoritos</h2>
+  <div class="grade" id="fav"></div>
+  <h2 class="secao-tit" id="tit-res" hidden>Resultados</h2>
+  <div class="grade" id="res"></div>
+</main>
+<div id="status" role="status" aria-live="polite"></div>
+<script src="../comum/base.js"></script>
+<script src="../comum/normas.js"></script>
+<script>
+'use strict';
+// Lê os cards de todas as páginas de normas (ficam guardados no aparelho pelo sw.js) e busca em todos de uma vez.
+const PAGINAS = ['nbr6118/', 'nbr12655/', 'nbr14931/', 'nbr15696/', 'nbr6120/', 'nbr6122/', 'nbr16868/', 'nbr7480/', 'nbr5738/', 'nbr16889/', 'nbr7211/',
+  'nbr7182/', 'nbr6484/', 'nbr12266/', 'nbr9649/', 'nbr12218/', 'nr18/', 'nr35/', 'nr33/', 'nr6/', 'nbr15575/', 'nbr9050/'];
+const MAX = 40;
+const q = document.getElementById('q');
+let todos = [];
+
+async function carregar() {
+  const lidos = await Promise.all(PAGINAS.map(async (pasta) => {
+    try {
+      const html = await (await fetch('../' + pasta)).text();
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const norma = doc.querySelector('.topo h1').textContent.replace(/ em cards$/, '');
+      return [...doc.querySelectorAll('.grade .cn')].map((c) => ({ c, pasta, norma }));
+    } catch (e) { return []; }
+  }));
+  todos = lidos.flat().map(({ c, pasta, norma }) => {
+    const card = document.importNode(c, true);
+    const svg = card.querySelector('svg');
+    const t = NORMAS.sem(norma + ' ' + card.textContent + ' ' + (svg ? svg.getAttribute('aria-label') || '' : ''));
+    NORMAS.prepararCard(card, pasta, norma);
+    const ir = document.createElement('a');
+    ir.className = 'origem';
+    ir.href = '../' + pasta + '#' + card.id;
+    ir.textContent = norma + ' › abrir na norma';
+    card.querySelector('h2').after(ir);
+    return { card, t, chave: pasta + '#' + card.id };
+  });
+  document.getElementById('info').textContent = `${todos.length} cards em ${PAGINAS.length} normas. Toque em ☆ num card para ele aparecer aqui.`;
+  mostrar();
+}
+
+function mostrar() {
+  const palavras = NORMAS.sem(q.value.trim()).split(/\s+/).filter(Boolean);
+  const favs = NORMAS.lerFav().map((f) => f.u);
+  const fav = palavras.length ? [] : todos.filter((x) => favs.includes(x.chave));
+  const res = palavras.length ? todos.filter((x) => palavras.every((p) => x.t.includes(p))) : [];
+  document.getElementById('fav').replaceChildren(...fav.map((x) => x.card));
+  document.getElementById('res').replaceChildren(...res.slice(0, MAX).map((x) => x.card));
+  document.getElementById('tit-fav').hidden = !fav.length;
+  const tr = document.getElementById('tit-res');
+  tr.hidden = !palavras.length;
+  tr.textContent = !res.length ? 'Nenhum card com essas palavras' : res.length > MAX ? `Resultados (${MAX} de ${res.length}: refine a busca)` : `Resultados (${res.length})`;
+}
+
+q.addEventListener('input', mostrar);
+// favoritar ou desfavoritar muda a lista de favoritos na hora
+document.addEventListener('click', (e) => { if (e.target.closest('.acao-card[aria-pressed]') &&!q.value.trim()) setTimeout(mostrar, 0); });
+carregar();
+</script>
+</body>
+</html>

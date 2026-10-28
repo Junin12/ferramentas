@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Medir na prancha (PDF)</title>
+<meta name="description" content="Calibre a escala e meça comprimentos, áreas e contagens em cima do PDF do projeto.">
+<meta name="theme-color" content="#1F5C99">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icon-192.png">
+<link rel="stylesheet" href="../comum/base.css">
+<style>
+:root{--brand:#1F5C99}
+.ferr-bar{display:flex;gap:6px;flex-wrap:wrap}
+.ferr-bar button[aria-pressed="true"]{background:var(--brand);color:#fff;border-color:var(--brand)}
+.palco{position:relative;overflow:auto;max-height:68vh;background:#555;border-radius:12px;touch-action:pan-x pan-y}
+.palco canvas{display:block}
+#marcas{position:absolute;left:0;top:0;pointer-events:none}
+.item .cor{width:14px;height:14px;border-radius:50%;flex:none}
+.escala{font-weight:600}
+.escala.sem{color:#b3261e}
+.grade2{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+</style>
+</head>
+<body>
+<header class="topo"><div class="in"><a class="voltar" href="../?g=dwg">‹ Plantas</a><h1>Medir na prancha (PDF)</h1></div></header>
+<main class="wrap">
+  <p class="sub">Abra o PDF do projeto, acerte a escala por uma cota conhecida e meça comprimentos, áreas e quantidades. Nada é enviado a servidor.</p>
+  <div class="drop" id="drop">
+    <p>Arraste o PDF para cá ou</p>
+    <label class="btn pri" for="arq">Escolher PDF</label>
+    <input class="sr" id="arq" type="file" accept="application/pdf,.pdf">
+  </div>
+  <section class="card hide" id="area">
+    <div class="row">
+      <label class="campo" style="flex:1">Folha<select id="pag"></select></label>
+      <button type="button" id="menos" aria-label="Diminuir">−</button><button type="button" id="mais" aria-label="Aumentar">+</button>
+    </div>
+    <p class="escala sem" id="escala">Sem escala: calibre antes de medir.</p>
+    <div class="ferr-bar" role="group" aria-label="Ferramenta">
+      <button type="button" data-f="cal" aria-pressed="false">📏 Calibrar</button>
+      <button type="button" data-f="lin" aria-pressed="false">〰 Comprimento</button>
+      <button type="button" data-f="are" aria-pressed="false">⬠ Área</button>
+      <button type="button" data-f="cnt" aria-pressed="false">✚ Contagem</button>
+    </div>
+    <div class="row">
+      <label class="campo" style="flex:1">Nome da medida<input id="nome" type="text" maxlength="60" placeholder="Ex.: tubo DN 300, piso sala 1, registros"></label>
+      <button type="button" id="desfazer">↶ Ponto</button>
+      <button type="button" class="pri" id="fechar">✓ Concluir medida</button>
+    </div>
+    <p class="info" id="dica">Escolha uma ferramenta e toque na prancha.</p>
+    <div class="palco" id="palco"><canvas id="tela"></canvas><canvas id="marcas"></canvas></div>
+  </section>
+  <section class="card hide" id="sec-lista">
+    <h2>Medidas</h2>
+    <ul class="lista" id="lista"></ul>
+    <div class="grade2" id="totais"></div>
+  </section>
+</main>
+<div class="acao"><div class="in">
+  <button type="button" id="png" disabled>Imagem</button>
+  <button type="button" class="pri" id="csv" disabled>Planilha (CSV)</button>
+</div></div>
+<div id="status" role="status" aria-live="polite"></div>
+<dialog id="dlg-cal" style="border:none;border-radius:14px;padding:16px;max-width:340px">
+  <form method="dialog" class="opcoes">
+    <h2 style="margin:0 0 8px">Calibrar a escala</h2>
+    <p class="info" id="cal-txt">Distância real entre os dois pontos:</p>
+    <label class="campo">Medida real (m)<input id="cal-m" type="text" inputmode="decimal" placeholder="Ex.: 5,00"></label>
+    <p class="info">Ou pela escala do desenho (folha impressa no tamanho original):</p>
+    <label class="campo">Escala 1 :<input id="cal-esc" type="text" inputmode="decimal" placeholder="Ex.: 50, 100, 500"></label>
+    <div class="row" style="margin-top:10px"><button value="cancel" id="cal-cancel">Cancelar</button><button value="ok" class="pri" id="cal-ok">Usar</button></div>
+  </form>
+</dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" crossorigin="anonymous"></script>
+<script src="../comum/base.js"></script>
+<script>
+'use strict';
+// Pontos guardados em pontos do PDF (escala 1): independem do zoom. Escala = metros por ponto do PDF, por folha.
+const CORES = ['#E2544A', '#1F5FA8', '#36B37E', '#F28C28', '#8A6BE0', '#18B5A6', '#C2570C', '#D63384'];
+const st = { doc: null, nome: '', n: 1, page: null, z: 1, ferr: null, atual: [], medidas: [], escala: {} };
+const tela = F.$('#tela'), marcas = F.$('#marcas'), mg = marcas.getContext('2d');
+const N2 = (v, d = 2) => v.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
+
+F.entrada(F.$('#drop'), F.$('#arq'), async (fs) => {
+  const f = fs.find(F.ehPdf); if (!f) return F.toast('Escolha um arquivo PDF.', true);
+  if (!F.libs('pdfjsLib')) return;
+  try {
+    st.doc = await pdfjsLib.getDocument({ isEvalSupported: false, data: await F.bytesPdf(f) }).promise; st.nome = F.nomeBase(f.name);
+    st.medidas = []; st.escala = {};
+    F.$('#pag').replaceChildren(...Array.from({ length: st.doc.numPages }, (_, i) => { const o = document.createElement('option'); o.value = i + 1; o.textContent = `Folha ${i + 1} de ${st.doc.numPages}`; return o; }));
+    F.$('#area').classList.remove('hide'); F.$('#drop').classList.add('hide');
+    await abrirFolha(1);
+  } catch (e) { F.toast(e.message || 'Não consegui abrir o PDF.', true); }
+});
+async function abrirFolha(n) {
+  st.n = n; st.page = await st.doc.getPage(n); st.atual = [];
+  const vp = st.page.getViewport({ scale: 1 }); st.z = Math.max(0.3, (F.$('#palco').clientWidth - 4) / vp.width);
+  await desenharFolha(); desenharLista();
+}
+let tarefa = null;
+async function desenharFolha() {
+  const dpr = Math.min(devicePixelRatio || 1, 2), vp = st.page.getViewport({ scale: st.z * dpr });
+  tarefa?.cancel();
+  tela.width = marcas.width = Math.floor(vp.width); tela.height = marcas.height = Math.floor(vp.height);
+  tela.style.width = marcas.style.width = vp.width / dpr + 'px'; tela.style.height = marcas.style.height = vp.height / dpr + 'px';
+  const g = tela.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, tela.width, tela.height);
+  tarefa = st.page.render({ canvasContext: g, viewport: vp });
+  try { await tarefa.promise; } catch (e) { return; }
+  desenharMarcas();
+}
+F.$('#pag').addEventListener('change', (e) => abrirFolha(+e.target.value));
+F.$('#mais').addEventListener('click', () => { st.z = Math.min(8, st.z * 1.5); desenharFolha(); });
+F.$('#menos').addEventListener('click', () => { st.z = Math.max(0.2, st.z / 1.5); desenharFolha(); });
+
+// ---------- ferramentas ----------
+const DICAS = { cal: 'Toque nas duas pontas de uma cota conhecida.', lin: 'Toque ponto a ponto ao longo do que vai medir. “Concluir” no fim.',
+  are: 'Toque nos cantos da área. “Concluir” fecha o contorno.', cnt: 'Toque em cada peça para contar. “Concluir” no fim.' };
+document.querySelectorAll('[data-f]').forEach((b) => b.addEventListener('click', () => {
+  if (b.dataset.f !== 'cal' && !escala()) return F.toast('Calibre a escala primeiro (📏).', true);
+  st.ferr = st.ferr === b.dataset.f ? null : b.dataset.f; st.atual = [];
+  document.querySelectorAll('[data-f]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.f === st.ferr)));
+  F.$('#dica').textContent = st.ferr ? DICAS[st.ferr] : 'Escolha uma ferramenta e toque na prancha.';
+  desenharMarcas();
+}));
+const escala = () => st.escala[st.n] || null; // metros por ponto do PDF
+function ptPdf(e) { const r = tela.getBoundingClientRect(); return [(e.clientX - r.left) / st.z, (e.clientY - r.top) / st.z]; }
+let ini = null;
+tela.addEventListener('pointerdown', (e) => { ini = [e.clientX, e.clientY]; });
+tela.addEventListener('pointerup', (e) => {
+  if (!ini || Math.hypot(e.clientX - ini[0], e.clientY - ini[1]) > 8 || !st.ferr) return; // arrastou: é rolagem
+  st.atual.push(ptPdf(e));
+  if (st.ferr === 'cal' && st.atual.length === 2) { pedirEscala(); return; }
+  desenharMarcas(); mostrarParcial();
+});
+F.$('#desfazer').addEventListener('click', () => { st.atual.pop(); desenharMarcas(); mostrarParcial(); });
+const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+const comp = (p) => p.reduce((s, q, i) => (i ? s + dist(p[i - 1], q) : 0), 0);
+const areaPol = (p) => Math.abs(p.reduce((s, q, i) => { const r = p[(i + 1) % p.length]; return s + q[0] * r[1] - r[0] * q[1]; }, 0)) / 2;
+function valor(m) {
+  const k = st.escala[m.n] || 0;
+  return m.tipo === 'lin' ? { v: comp(m.p) * k, un: 'm' } : m.tipo === 'are' ? { v: areaPol(m.p) * k * k, un: 'm²', per: (comp(m.p) + dist(m.p[0], m.p.at(-1))) * k } : { v: m.p.length, un: 'un' };
+}
+function mostrarParcial() {
+  if (!st.ferr || st.ferr === 'cal' || !st.atual.length) return;
+  const v = valor({ tipo: st.ferr, p: st.atual, n: st.n });
+  F.$('#dica').textContent = `${st.ferr === 'cnt' ? '' : 'Parcial: '}${N2(v.v, st.ferr === 'cnt' ? 0 : 2)} ${v.un} · ${st.atual.length} ponto${st.atual.length > 1 ? 's' : ''}`;
+}
+function pedirEscala() {
+  const d = dist(st.atual[0], st.atual[1]);
+  F.$('#cal-txt').textContent = `Os dois pontos estão a ${N2(d * 25.4 / 72, 1)} mm na folha. Qual a medida real?`;
+  F.$('#cal-m').value = ''; F.$('#cal-esc').value = '';
+  F.$('#dlg-cal').returnValue = ''; F.$('#dlg-cal').showModal();
+}
+// os botões tratam na hora; o "close" (tecla Esc ou voltar do celular) só cancela o que ficou pendente
+function concluirCal(usar) {
+  if (!st.atual.length && !usar) return;
+  const d = dist(st.atual[0] || [0, 0], st.atual[1] || [0, 0]), m = parseFloat(F.$('#cal-m').value.replace(',', '.')), es = parseFloat(F.$('#cal-esc').value.replace(',', '.'));
+  if (usar) {
+    // 1 ponto do PDF = 25,4/72 mm na folha
+    if (m > 0 && d > 0) st.escala[st.n] = m / d;
+    else if (es > 0) st.escala[st.n] = (25.4 / 72 / 1000) * es;
+    else F.toast('Informe a medida real ou a escala.', true);
+  }
+  st.atual = []; st.ferr = null; document.querySelectorAll('[data-f]').forEach((x) => x.setAttribute('aria-pressed', 'false'));
+  mostrarEscala(); desenharMarcas();
+}
+F.$('#cal-ok').addEventListener('click', (e) => { e.preventDefault(); concluirCal(true); F.$('#dlg-cal').close(); });
+F.$('#cal-cancel').addEventListener('click', (e) => { e.preventDefault(); concluirCal(false); F.$('#dlg-cal').close(); });
+F.$('#dlg-cal').addEventListener('close', () => concluirCal(false));
+function mostrarEscala() {
+  const k = escala(), e = F.$('#escala');
+  e.classList.toggle('sem', !k);
+  e.textContent = k ? `Escala da folha ${st.n}: 1 cm no papel = ${N2(k / (25.4 / 72) * 10, 2)} m (≈ 1:${Math.round(k / (25.4 / 72 / 1000))})` : 'Sem escala nesta folha: calibre antes de medir.';
+}
+F.$('#fechar').addEventListener('click', () => {
+  if (!st.ferr || st.ferr === 'cal') return;
+  const min = st.ferr === 'are' ? 3 : st.ferr === 'lin' ? 2 : 1;
+  if (st.atual.length < min) return F.toast(`Marque pelo menos ${min} ponto${min > 1 ? 's' : ''}.`, true);
+  const nome = F.$('#nome').value.trim() || { lin: 'Comprimento', are: 'Área', cnt: 'Contagem' }[st.ferr] + ' ' + (st.medidas.length + 1);
+  st.medidas.push({ tipo: st.ferr, p: st.atual, n: st.n, nome, cor: CORES[st.medidas.length % CORES.length] });
+  st.atual = []; F.$('#nome').value = ''; desenharMarcas(); desenharLista(); F.$('#dica').textContent = DICAS[st.ferr];
+});
+
+// ---------- desenho ----------
+function desenharMarcas(alvo = mg, z = st.z * (tela.width / parseFloat(tela.style.width || tela.width))) {
+  const g = alvo; g.clearRect(0, 0, g.canvas.width, g.canvas.height);
+  const P = (p) => [p[0] * z, p[1] * z], lw = Math.max(2, z * 1.2);
+  const forma = (m, cor, viva) => {
+    g.save(); g.strokeStyle = cor; g.fillStyle = cor; g.lineWidth = lw; g.lineJoin = 'round';
+    if (m.tipo === 'cnt') m.p.forEach((q, i) => { const [x, y] = P(q); g.beginPath(); g.arc(x, y, lw * 3, 0, 7); g.globalAlpha = 0.85; g.fill(); g.globalAlpha = 1; g.fillStyle = '#fff'; g.font = `bold ${lw * 3.4}px sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.fillText(String(i + 1), x, y); g.fillStyle = cor; });
+    else {
+      g.beginPath(); m.p.forEach((q, i) => { const [x, y] = P(q); i ? g.lineTo(x, y) : g.moveTo(x, y); });
+      if (m.tipo === 'are' && (!viva || m.p.length > 2)) { g.closePath(); g.globalAlpha = 0.18; g.fill(); g.globalAlpha = 1; }
+      g.stroke(); m.p.forEach((q) => { const [x, y] = P(q); g.beginPath(); g.arc(x, y, lw * 1.4, 0, 7); g.fill(); });
+    }
+    if (!viva && m.tipo !== 'cnt') { const v = valor(m), c = m.p.reduce((s, q) => [s[0] + q[0] / m.p.length, s[1] + q[1] / m.p.length], [0, 0]), [x, y] = P(c);
+      g.font = `bold ${lw * 5}px sans-serif`; g.textAlign = 'center'; g.lineWidth = lw * 1.5; g.strokeStyle = '#fff'; const t = `${N2(v.v)} ${v.un}`; g.strokeText(t, x, y); g.fillStyle = cor; g.fillText(t, x, y); }
+    g.restore();
+  };
+  st.medidas.filter((m) => m.n === st.n).forEach((m) => forma(m, m.cor));
+  if (st.atual.length) forma({ tipo: st.ferr === 'cal' ? 'lin' : st.ferr, p: st.atual, n: st.n }, st.ferr === 'cal' ? '#000' : '#E2544A', true);
+}
+function desenharLista() {
+  mostrarEscala();
+  F.$('#sec-lista').classList.toggle('hide', !st.medidas.length);
+  F.$('#csv').disabled = F.$('#png').disabled = !st.medidas.length;
+  F.$('#lista').replaceChildren(...st.medidas.map((m, k) => {
+    const v = valor(m), li = document.createElement('li'); li.className = 'item';
+    li.innerHTML = '<span class="cor"></span><div class="nm"><b></b><small></small></div><button type="button" class="mini" aria-label="Apagar medida">✕</button>';
+    li.querySelector('.cor').style.background = m.cor; li.querySelector('b').textContent = m.nome;
+    li.querySelector('small').textContent = `${N2(v.v, m.tipo === 'cnt' ? 0 : 2)} ${v.un}${v.per ? ` · perímetro ${N2(v.per)} m` : ''} · folha ${m.n}`;
+    li.querySelector('button').onclick = () => { st.medidas.splice(k, 1); desenharLista(); desenharMarcas(); };
+    return li;
+  }));
+  // totais por nome (ex.: vários trechos do mesmo tubo)
+  const tot = new Map(); for (const m of st.medidas) { const v = valor(m), k = m.nome.replace(/\s+\d+$/, '') + '|' + v.un; tot.set(k, (tot.get(k) || 0) + v.v); }
+  F.$('#totais').replaceChildren(...[...tot].map(([k, v]) => { const [n, un] = k.split('|'), d = document.createElement('div'); d.className = 'item'; d.innerHTML = '<div class="nm"><small></small><b></b></div>'; d.querySelector('small').textContent = n; d.querySelector('b').textContent = `${N2(v, un === 'un' ? 0 : 2)} ${un}`; return d; }));
+}
+F.$('#csv').addEventListener('click', () => {
+  const l = [['Medida', 'Tipo', 'Folha', 'Valor', 'Unidade', 'Perímetro (m)', 'Pontos'], ...st.medidas.map((m) => { const v = valor(m); return [m.nome, { lin: 'Comprimento', are: 'Área', cnt: 'Contagem' }[m.tipo], m.n, N2(v.v, m.tipo === 'cnt' ? 0 : 3), v.un, v.per ? N2(v.per, 3) : '', m.p.length]; })];
+  F.baixar(new Blob(['﻿' + l.map((x) => x.join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' }), `${st.nome}_medidas.csv`);
+});
+F.$('#png').addEventListener('click', () => F.trabalhando(F.$('#png'), async () => {
+  // folha atual com as medidas por cima
+  const c = document.createElement('canvas'); c.width = tela.width; c.height = tela.height; const g = c.getContext('2d'); g.drawImage(tela, 0, 0); g.drawImage(marcas, 0, 0);
+  F.baixar(await F.jpeg(c, 0.88), `${st.nome}_folha${st.n}_medidas.jpg`);
+}));
+</script>
+</body>
+</html>

@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sondagem SPT em cards</title>
+<meta name="description" content="NBR 6484 e NBR 8036: sondagem SPT, número de golpes, nível d'água, boletim e quantidade de furos, em desenhos.">
+<meta name="theme-color" content="#2F5D62">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icon-192.png">
+<link rel="stylesheet" href="../comum/base.css">
+<link rel="stylesheet" href="../comum/normas.css">
+</head>
+<body>
+<header class="topo"><div class="in"><a class="voltar" href="../?g=normas">‹ Normas</a><h1>Sondagem SPT em cards</h1></div></header>
+<main class="wrap">
+  <p class="aviso">Resumo das ABNT NBR 6484 (sondagem de simples reconhecimento com SPT) e NBR 8036 (programação de sondagens). Para consulta rápida: confira nas normas oficiais.</p>
+  <div class="filtros" role="toolbar" aria-label="Filtrar por tema"><input id="q" type="search" placeholder="Buscar: golpes, NSPT, furos…" aria-label="Buscar nos cards"></div>
+<div class="grade">
+
+<article class="cn">
+  <header><span class="tag">Ensaio</span><span class="sec">NBR 6484</span></header>
+  <h2>Martelo e amostrador</h2>
+  <div class="corpo">
+    <svg class="ill" viewBox="0 0 320 150" role="img" aria-label="Martelo de 65 kg caindo de 75 cm sobre a haste; amostrador padrão com 50,8 mm de diâmetro externo e 34,9 mm interno">
+      <path class="ln" d="M80 0v150" style="stroke-width:4"/>
+      <rect class="ink" x="64" y="10" width="32" height="34" rx="3"/><text x="104" y="30" class="b">65 kg</text>
+      <path class="dim" d="M52 45V118" marker-start="url(#sa)" marker-end="url(#sa)"/><text x="10" y="86" class="a">75 cm</text>
+      <rect class="mut" x="70" y="118" width="20" height="8"/>
+      <rect class="te" x="160" y="0" width="160" height="150"/>
+      <rect class="fe" x="226" y="10" width="26" height="120" rx="3"/><rect class="te2" x="232" y="20" width="14" height="100"/>
+      <text x="168" y="144" class="p">amostrador</text>
+      <text x="256" y="60" class="b" style="fill:var(--panel)"> </text>
+      <text x="170" y="22" class="s">Ø ext 50,8</text><text x="170" y="36" class="s">Ø int 34,9</text>
+    </svg>
+  </div>
+  <div class="dica">Queda livre de verdade: corda com folga e sem atrito. Martelo segurado na descida dá NSPT falso.</div>
+</article>
+
+<article class="cn">
+  <header><span class="tag">Ensaio</span><span class="sec">NBR 6484</span></header>
+  <h2>Como se conta o NSPT</h2>
+  <div class="corpo">
+    <svg class="ill" viewBox="0 0 320 136" role="img" aria-label="Cravar 45 cm em três trechos de 15 cm; NSPT é a soma dos golpes dos dois últimos trechos">
+      <rect class="te" x="20" y="10" width="110" height="110"/>
+      <rect class="fe" x="64" y="10" width="22" height="110" rx="3"/>
+      <path class="ln" d="M20 20H140M20 54H140M20 88H140M20 120H140" style="stroke-dasharray:4 3"/>
+      <text x="150" y="42" class="p">1º · 15 cm</text><text x="236" y="42" class="mut">4 golpes</text>
+      <text x="150" y="76" class="b">2º · 15 cm</text><text x="236" y="76" class="a">6 golpes</text>
+      <text x="150" y="110" class="b">3º · 15 cm</text><text x="236" y="110" class="a">7 golpes</text>
+      <text x="236" y="128" class="a">NSPT = 13</text>
+    </svg>
+  </div>
+  <div class="dica">O primeiro trecho é só de assentamento e não entra no NSPT.</div>
+</article>
+
+<article class="cn">
+  <header><span class="tag">Leitura</span><span class="sec">NBR 6484 · Anexo</span></header>
+  <h2>Compacidade e consistência</h2>
+  <div class="corpo">
+    <div class="tb"><table class="mini">
+      <tr><th>Areia (NSPT)</th><th>Compacidade</th></tr>
+      <tr><td>≤ 4</td><td>fofa</td></tr>
+      <tr><td>5 a 8</td><td>pouco compacta</td></tr>
+      <tr><td>9 a 18</td><td>med. compacta</td></tr>
+      <tr><td>19 a 40</td><td>compacta</td></tr>
+      <tr><td>&gt; 40</td><td>muito compacta</td></tr>
+    </table></div>
+    <div class="tb"><table class="mini">
+      <tr><th>Argila (NSPT)</th><th>Consistência</th></tr>
+      <tr><td>≤ 2</td><td>muito mole</td></tr>
+      <tr><td>3 a 5</td><td>mole</td></tr>
+      <tr><td>6 a 10</td><td>média</td></tr>
+      <tr><td>11 a 19</td><td>rija</td></tr>
+      <tr><td>&gt; 19</td><td>dura</td></tr>
+    </table></div>
+  </div>
+  <div class="dica">Argila mole (NSPT ≤ 5) perto da superfície: atenção a recalque e a escavação instável.</div>
+</article>
+
+<article class="cn">
+  <header><span class="tag">Leitura</span><span class="sec">NBR 6484</span></header>
+  <h2>Nível d'água</h2>
+  <div class="corpo">
+    <svg class="ill" viewBox="0 0 320 118" role="img" aria-label="Avanço a trado até encontrar água; anotar o nível d'água na sondagem e de novo após 12 horas">
+      <rect class="te" x="20" y="10" width="140" height="100"/><rect class="ags" x="20" y="60" width="140" height="50"/>
+      <rect class="pan" x="80" y="10" width="16" height="100" style="stroke:var(--ink)"/><rect class="ag" x="81" y="60" width="14" height="49"/>
+      <path class="agl" d="M14 60H170"/><text x="174" y="64" class="u">NA</text>
+      <text x="190" y="30" class="b">trado até a água</text><text x="190" y="46" class="p">abaixo: lavagem</text>
+      <text x="190" y="86" class="b">medir de novo</text><text x="190" y="102" class="a">após 12 h</text>
+    </svg>
+  </div>
+  <div class="dica">NA alto muda tudo: escavação, fundação, rebaixamento e impermeabilização.</div>
+</article>
+
+<article class="cn">
+  <header><span class="tag">Programação</span><span class="sec">NBR 8036</span></header>
+  <h2>Quantos furos</h2>
+  <div class="corpo">
+    <svg class="ill" viewBox="0 0 320 120" role="img" aria-label="Área construída até 200 m²: 2 furos; até 400 m²: 3 furos; de 400 a 1200 m²: 1 furo a cada 200 m²">
+      <g><rect class="pan" x="14" y="16" width="70" height="50" style="stroke:var(--ink)"/><circle class="ac" cx="30" cy="32" r="5"/><circle class="ac" cx="68" cy="50" r="5"/><text x="49" y="86" text-anchor="middle" class="b">≤ 200 m²</text><text x="49" y="102" text-anchor="middle" class="a">2 furos</text></g>
+      <g transform="translate(106 0)"><rect class="pan" x="6" y="12" width="86" height="58" style="stroke:var(--ink)"/><circle class="ac" cx="22" cy="28" r="5"/><circle class="ac" cx="76" cy="28" r="5"/><circle class="ac" cx="49" cy="56" r="5"/><text x="49" y="86" text-anchor="middle" class="b">≤ 400 m²</text><text x="49" y="102" text-anchor="middle" class="a">3 furos</text></g>
+      <g transform="translate(212 0)"><rect class="pan" x="2" y="8" width="96" height="64" style="stroke:var(--ink)"/><g class="ac"><circle cx="16" cy="22" r="4"/><circle cx="50" cy="22" r="4"/><circle cx="84" cy="22" r="4"/><circle cx="16" cy="58" r="4"/><circle cx="50" cy="58" r="4"/><circle cx="84" cy="58" r="4"/></g><text x="50" y="86" text-anchor="middle" class="b">400–1200 m²</text><text x="50" y="102" text-anchor="middle" class="a">1 a cada 200 m²</text></g>
+    </svg>
+    <div class="chips"><span>furos <b>não alinhados</b>, cobrindo a projeção</span><span>área = projeção da construção</span></div>
+  </div>
+  <div class="dica">Prédio com subsolo: a sondagem precisa passar bem abaixo do fundo da escavação.</div>
+</article>
+
+</div>
+<p class="vazio hide" id="vazio">Nenhum card encontrado. Tente outra palavra ou volte para "Todos".</p>
+</main>
+<div id="status" role="status" aria-live="polite"></div>
+<script src="../comum/base.js"></script>
+<script src="../comum/normas.js"></script>
+</body>
+</html>

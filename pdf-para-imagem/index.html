@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDF para imagem</title>
+<meta name="description" content="Exporte as páginas de um PDF como imagens JPG, direto no aparelho.">
+<meta name="theme-color" content="#d93025">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icon-192.png">
+<link rel="stylesheet" href="../comum/base.css">
+</head>
+<body>
+<header class="topo"><div class="in"><a class="voltar" href="../?g=pdf">‹ PDF</a><h1>PDF para imagem</h1></div></header>
+<main class="wrap">
+  <p class="sub">Cada página vira uma imagem JPG. Nada é enviado a servidor.</p>
+  <div class="drop" id="drop">
+    <p id="drop-txt">Arraste um PDF para cá ou</p>
+    <label class="btn pri" for="arq">Escolher PDF</label>
+    <input class="sr" id="arq" type="file" accept="application/pdf,.pdf">
+  </div>
+  <section class="card hide" id="opcoes">
+    <h2 id="arq-nome"></h2>
+    <div class="row">
+      <label class="campo" style="flex:2">Páginas (vazio = todas)
+        <input id="pags" type="text" inputmode="numeric" autocomplete="off" placeholder="Ex.: 1-3, 5">
+      </label>
+      <label class="campo" style="flex:1">Qualidade
+        <select id="dpi"><option value="100">Leve (tela)</option><option value="150" selected>Boa</option><option value="220">Alta (impressão)</option></select>
+      </label>
+    </div>
+    <p class="info">Uma página baixa como .jpg; mais de uma vêm dentro de um .zip.</p>
+  </section>
+</main>
+<div class="acao"><div class="in"><button class="pri" id="exportar" type="button" disabled>Exportar imagens</button></div></div>
+<div id="status" role="status" aria-live="polite"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin="anonymous"></script>
+<script src="../comum/base.js"></script>
+<script>
+'use strict';
+let arq = null; // {nome, pdf}
+
+F.entrada(F.$('#drop'), F.$('#arq'), async ([f]) => {
+  if (!F.libs('pdfjsLib', 'JSZip')) return;
+  try {
+    const bytes = await F.bytesPdf(f);
+    let pdf;
+    try { pdf = await pdfjsLib.getDocument({ isEvalSupported: false, data: bytes }).promise; }
+    catch (err) { throw new Error(err.name === 'PasswordException' ? 'PDF protegido por senha.' : 'Não consegui abrir este PDF.'); }
+    if (arq) arq.pdf.destroy();
+    arq = { nome: f.name, pdf };
+    F.$('#arq-nome').textContent = `${f.name} · ${pdf.numPages} página${pdf.numPages > 1 ? 's' : ''}`;
+    F.$('#drop-txt').textContent = 'Trocar de arquivo:';
+    F.$('#opcoes').classList.remove('hide');
+    F.$('#exportar').disabled = false;
+  } catch (e) { F.toast(e.message, true); }
+});
+
+F.$('#exportar').addEventListener('click', (e) => F.trabalhando(e.currentTarget, async (msg) => {
+  const idx = F.intervalos(F.$('#pags').value, arq.pdf.numPages).flat();
+  const dpi = +F.$('#dpi').value, base = F.nomeBase(arq.nome);
+  const imgs = [];
+  for (let k = 0; k < idx.length; k++) {
+    msg(`Página ${k + 1} de ${idx.length}…`);
+    const page = await arq.pdf.getPage(idx[k] + 1);
+    const c = await F.canvasDaPagina(page, dpi);
+    imgs.push({ nome: `${base}-p${idx[k] + 1}.jpg`, blob: await F.jpeg(c, 0.9) });
+    c.width = 0;
+    page.cleanup();
+  }
+  if (imgs.length === 1) F.baixar(imgs[0].blob, imgs[0].nome);
+  else {
+    msg('Compactando…');
+    const zip = new JSZip();
+    imgs.forEach((im) => zip.file(im.nome, im.blob));
+    F.baixar(await zip.generateAsync({ type: 'blob' }), `${base}-imagens.zip`);
+  }
+  F.toast(imgs.length === 1 ? 'Imagem pronta.' : `${imgs.length} imagens prontas no .zip.`);
+}));
+</script>
+</body>
+</html>

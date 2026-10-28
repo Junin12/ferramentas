@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calculadora de prazos</title>
+<meta name="description" content="Dias úteis entre datas e vencimento de prazos em dias úteis ou corridos, com feriados nacionais e locais.">
+<meta name="theme-color" content="#1F5FA8">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icon-192.png">
+<link rel="stylesheet" href="../comum/base.css">
+<style>
+:root{--brand:#1F5FA8}
+.modo{display:flex;gap:6px}
+.modo button{flex:1}
+.modo button[aria-pressed="true"]{border-color:var(--brand);color:var(--brand);font-weight:700}
+.grade2{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.campo textarea{font:14px/1.4 ui-monospace,Consolas,monospace;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%;min-height:90px}
+.res{display:grid;gap:4px}
+.res .grande{font-size:26px;font-weight:700;color:var(--brand)}
+.linha{display:flex;justify-content:space-between;gap:10px;border-bottom:1px dashed var(--line);padding:3px 0}
+.fer li{display:flex;justify-content:space-between;gap:10px}
+</style>
+</head>
+<body>
+<header class="topo"><div class="in"><a class="voltar" href="../?g=util">‹ Utilidades</a><h1>Calculadora de prazos</h1></div></header>
+<main class="wrap">
+  <div class="modo" role="group" aria-label="Cálculo">
+    <button type="button" data-m="somar" aria-pressed="true">Vencimento de um prazo</button>
+    <button type="button" data-m="entre" aria-pressed="false">Dias entre duas datas</button>
+  </div>
+  <section class="card" id="c-somar">
+    <div class="grade2">
+      <label class="campo">Data inicial<input id="ini" type="date"></label>
+      <label class="campo">Prazo<input id="n" type="text" inputmode="numeric" value="30"></label>
+      <label class="campo">Contar em
+        <select id="tipo"><option value="uteis">dias úteis</option><option value="corridos">dias corridos</option></select>
+      </label>
+      <label class="campo">Sentido
+        <select id="sentido"><option value="1">depois da data</option><option value="-1">antes da data (antecedência)</option></select>
+      </label>
+    </div>
+    <div class="opcoes">
+      <label><input type="checkbox" id="contaIni"> <span>O dia inicial conta como o 1º dia<small>Desmarcado: começa a contar no dia seguinte (o mais comum em contratos)</small></span></label>
+      <label><input type="checkbox" id="prorroga" checked> <span>Vencimento em dia não útil passa para o próximo dia útil<small>Só para dias corridos</small></span></label>
+    </div>
+  </section>
+  <section class="card hide" id="c-entre">
+    <div class="grade2">
+      <label class="campo">De<input id="de" type="date"></label>
+      <label class="campo">Até<input id="ate" type="date"></label>
+    </div>
+    <div class="opcoes"><label><input type="checkbox" id="incl" checked> <span>Contar os dois dias (início e fim)</span></label></div>
+  </section>
+  <section class="card">
+    <h2>Dias úteis</h2>
+    <div class="opcoes">
+      <label><input type="checkbox" id="sab"> <span>Sábado é dia útil (obra que trabalha no sábado)</span></label>
+      <label><input type="checkbox" id="facult" checked> <span>Não contar Carnaval e Corpus Christi (pontos facultativos)</span></label>
+    </div>
+    <details>
+      <summary>Feriados locais</summary>
+      <label class="campo">Um por linha: dia/mês e o nome (vale todo ano)<textarea id="locais" spellcheck="false"></textarea></label>
+      <p class="info">Já vem com os de Uberaba (MG). Confira com a prefeitura e ajuste para a cidade da obra; fica guardado neste aparelho.</p>
+    </details>
+  </section>
+  <section class="card res" id="res" aria-live="polite"></section>
+  <section class="card hide" id="sec-fer"><h2 id="fer-tit">Feriados no período</h2><ul class="lista fer" id="fer"></ul></section>
+</main>
+<div id="status" role="status" aria-live="polite"></div>
+<script src="../comum/base.js"></script>
+<script>
+'use strict';
+const LOCAIS_PADRAO = '02/03 Aniversário de Uberaba\n15/08 Nossa Senhora da Abadia (Uberaba)';
+const CHAVE = 'prazos-locais';
+let modo = 'somar';
+// ---------- datas (sempre ao meio-dia: sem tropeço no horário de verão) ----------
+const D = (iso) => new Date(iso + 'T12:00:00');
+const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const mais = (s, n) => { const d = D(s); d.setDate(d.getDate() + n); return iso(d); };
+const br = (s) => s.split('-').reverse().join('/');
+const SEMANA = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quinta-feira', 'sexta-feira', 'sábado'];
+const diaSem = (s) => SEMANA[D(s).getDay()];
+// Páscoa (algoritmo de Meeus/Jones/Butcher, calendário gregoriano)
+function pascoa(a) {
+  const b = Math.floor(a / 100), c = a % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+  const h = (19 * (a % 19) + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor(((a % 19) + 11 * h + 22 * l) / 451);
+  const mes = Math.floor((h + l - 7 * m + 114) / 31), dia = ((h + l - 7 * m + 114) % 31) + 1;
+  return `${a}-${String(mes).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+}
+const cache = new Map();
+// feriados do ano: {data: nome}
+function feriados(a) {
+  const k = `${a}|${F.$('#facult').checked}|${F.$('#locais').value}`; if (cache.has(k)) return cache.get(k);
+  const f = {}, p = pascoa(a), fixo = (dm, nome) => (f[`${a}-${dm}`] = nome);
+  [['01-01', 'Confraternização Universal'], ['04-21', 'Tiradentes'], ['05-01', 'Dia do Trabalho'], ['09-07', 'Independência'], ['10-12', 'Nossa Senhora Aparecida'],
+    ['11-02', 'Finados'], ['11-15', 'Proclamação da República'], ['11-20', 'Consciência Negra'], ['12-25', 'Natal']].forEach(([dm, n]) => fixo(dm, n));
+  f[mais(p, -2)] = 'Sexta-feira Santa';
+  if (F.$('#facult').checked) { f[mais(p, -48)] = 'Carnaval (segunda)'; f[mais(p, -47)] = 'Carnaval (terça)'; f[mais(p, 60)] = 'Corpus Christi'; }
+  for (const l of F.$('#locais').value.split('\n')) { const m = l.trim().match(/^(\d{1,2})\/(\d{1,2})\s*(.*)$/); if (m) fixo(`${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`, m[3] || 'Feriado local'); }
+  cache.set(k, f); return f;
+}
+const feriado = (s) => feriados(+s.slice(0, 4))[s];
+const util = (s) => { const w = D(s).getDay(); return w !== 0 && !(w === 6 && !F.$('#sab').checked) && !feriado(s); };
+
+// ---------- cálculos ----------
+function somar() {
+  const ini = F.$('#ini').value, n = parseInt(F.$('#n').value, 10), sentido = +F.$('#sentido').value, uteis = F.$('#tipo').value === 'uteis', contaIni = F.$('#contaIni').checked;
+  if (!ini || !(n >= 0) || n > 20000) return null;
+  const passados = [];
+  let d = ini, cont = 0;
+  // o 1º dia é o inicial (se conta) ou o seguinte/anterior
+  if (contaIni && n > 0 && (!uteis || util(d))) { cont = 1; passados.push(d); }
+  while (cont < n) { d = mais(d, sentido); if (!uteis || util(d)) { cont++; passados.push(d); } }
+  let fim = d, prorrogado = null;
+  if (!uteis && F.$('#prorroga').checked && n > 0 && !util(fim)) { prorrogado = fim; while (!util(fim)) fim = mais(fim, sentido); }
+  const de = sentido > 0 ? ini : fim, ate = sentido > 0 ? fim : ini;
+  return { fim, prorrogado, corridos: Math.abs(Math.round((D(fim) - D(ini)) / 864e5)), de, ate };
+}
+function entre() {
+  let de = F.$('#de').value, ate = F.$('#ate').value; if (!de || !ate) return null;
+  const inverte = ate < de; if (inverte) [de, ate] = [ate, de];
+  let corr = 0, ut = 0, fds = 0; const fer = [];
+  const a0 = F.$('#incl').checked ? de : mais(de, 1);
+  for (let d = a0; d <= ate; d = mais(d, 1)) { corr++; const w = D(d).getDay(); if (util(d)) ut++; else if (w === 0 || w === 6) fds++; }
+  return { de, ate, corr, ut, fds, inverte };
+}
+function feriadosEntre(de, ate) {
+  const out = []; for (let a = +de.slice(0, 4); a <= +ate.slice(0, 4); a++) for (const [d, n] of Object.entries(feriados(a))) if (d >= de && d <= ate) out.push([d, n]);
+  return out.sort((x, y) => x[0].localeCompare(y[0]));
+}
+
+// ---------- tela ----------
+const linha = (a, b) => { const e = document.createElement('div'); e.className = 'linha'; e.innerHTML = '<span></span><b></b>'; e.firstChild.textContent = a; e.lastChild.textContent = b; return e; };
+function atualizar() {
+  try { localStorage.setItem(CHAVE, F.$('#locais').value); } catch (e) { /* segue */ }
+  const box = F.$('#res'); box.replaceChildren();
+  let de, ate;
+  if (modo === 'somar') {
+    const r = somar(); if (!r) { box.textContent = 'Informe a data inicial e o prazo.'; F.$('#sec-fer').classList.add('hide'); return; }
+    const g = document.createElement('div'); g.className = 'grande'; g.textContent = br(r.fim); box.append(g);
+    box.append(linha('Dia da semana', diaSem(r.fim)));
+    if (r.prorrogado) box.append(linha('Cairia em', `${br(r.prorrogado)} (${feriado(r.prorrogado) || diaSem(r.prorrogado)}): passou para o próximo dia útil`));
+    box.append(linha('Dias corridos até lá', `${r.corridos}`));
+    if (!util(r.fim)) box.append(linha('Atenção', 'o vencimento não é dia útil'));
+    de = r.de; ate = r.ate;
+  } else {
+    const r = entre(); if (!r) { box.textContent = 'Informe as duas datas.'; F.$('#sec-fer').classList.add('hide'); return; }
+    const g = document.createElement('div'); g.className = 'grande'; g.textContent = `${r.ut} dias úteis`; box.append(g);
+    box.append(linha('Dias corridos', String(r.corr)), linha('Fins de semana' + (F.$('#sab').checked ? ' (domingos)' : ''), String(r.fds)),
+      linha('Feriados em dia de semana', String(r.corr - r.ut - r.fds)), linha('Semanas', (r.corr / 7).toLocaleString('pt-BR', { maximumFractionDigits: 1 })));
+    if (r.inverte) box.append(linha('Obs.', 'as datas estavam invertidas'));
+    de = r.de; ate = r.ate;
+  }
+  const fs = feriadosEntre(de, ate);
+  F.$('#sec-fer').classList.toggle('hide', !fs.length);
+  F.$('#fer-tit').textContent = `Feriados no período · ${fs.length}`;
+  F.$('#fer').replaceChildren(...fs.map(([d, n]) => { const li = document.createElement('li'); li.className = 'item'; li.innerHTML = '<span></span><small></small>'; li.firstChild.textContent = `${br(d)} · ${n}`; li.lastChild.textContent = diaSem(d); return li; }));
+}
+document.querySelectorAll('[data-m]').forEach((b) => b.addEventListener('click', () => {
+  modo = b.dataset.m; document.querySelectorAll('[data-m]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  F.$('#c-somar').classList.toggle('hide', modo !== 'somar'); F.$('#c-entre').classList.toggle('hide', modo !== 'entre'); atualizar();
+}));
+let locais = LOCAIS_PADRAO; try { locais = localStorage.getItem(CHAVE) ?? LOCAIS_PADRAO; } catch (e) { /* padrão */ }
+F.$('#locais').value = locais;
+const hoje = iso(new Date()); F.$('#ini').value = F.$('#de').value = hoje; F.$('#ate').value = mais(hoje, 30);
+document.querySelectorAll('input,select,textarea').forEach((i) => i.addEventListener(i.tagName === 'TEXTAREA' || i.type === 'text' ? 'input' : 'change', atualizar));
+atualizar();
+</script>
+</body>
+</html>

@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Juntar PDFs</title>
+<meta name="description" content="Junte vários PDFs num arquivo só, direto no aparelho.">
+<meta name="theme-color" content="#d93025">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icon-192.png">
+<link rel="stylesheet" href="../comum/base.css">
+</head>
+<body>
+<header class="topo"><div class="in"><a class="voltar" href="../?g=pdf">‹ PDF</a><h1>Juntar PDFs</h1></div></header>
+<main class="wrap">
+  <p class="sub">Escolha os arquivos e ponha na ordem em que devem ficar. Nada é enviado a servidor.</p>
+  <div class="drop" id="drop">
+    <p>Arraste os PDFs para cá ou</p>
+    <label class="btn pri" for="arq">Escolher PDFs</label>
+    <input class="sr" id="arq" type="file" accept="application/pdf,.pdf" multiple>
+  </div>
+  <ol class="lista" id="lista" aria-label="Arquivos, na ordem em que serão juntados"></ol>
+  <p class="info" id="resumo"></p>
+</main>
+<div class="acao"><div class="in"><button class="pri" id="juntar" type="button" disabled>Juntar PDFs</button></div></div>
+<div id="status" role="status" aria-live="polite"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" crossorigin="anonymous"></script>
+<script src="../comum/base.js"></script>
+<script>
+'use strict';
+const lista = []; // {nome, bytes, paginas, tam}
+
+F.entrada(F.$('#drop'), F.$('#arq'), async (files) => {
+  if (!F.libs('PDFLib')) return;
+  for (const f of files) {
+    try {
+      const bytes = await F.bytesPdf(f);
+      const doc = await F.abrirPdfLib(bytes, f.name);
+      lista.push({ nome: f.name, bytes, paginas: doc.getPageCount(), tam: f.size });
+    } catch (e) { F.toast(e.message, true); }
+  }
+  desenhar();
+});
+
+function mover(i, d) {
+  const j = i + d;
+  if (j < 0 || j >= lista.length) return;
+  [lista[i], lista[j]] = [lista[j], lista[i]];
+  desenhar();
+  F.$(`#lista li:nth-child(${j + 1}) [data-d="${d}"]`)?.focus();
+}
+
+function desenhar() {
+  F.$('#lista').replaceChildren(...lista.map((it, i) => {
+    const li = document.createElement('li');
+    li.className = 'item';
+    li.innerHTML = `<span class="nm"><b></b><small></small></span>
+      <button class="mini" type="button" data-d="-1" aria-label="Subir">↑</button>
+      <button class="mini" type="button" data-d="1" aria-label="Descer">↓</button>
+      <button class="mini" type="button" data-x aria-label="Tirar da lista">✕</button>`;
+    li.querySelector('b').textContent = `${i + 1}. ${it.nome}`;
+    li.querySelector('small').textContent = `${it.paginas} página${it.paginas > 1 ? 's' : ''} · ${F.tamanho(it.tam)}`;
+    li.querySelector('[data-d="-1"]').onclick = () => mover(i, -1);
+    li.querySelector('[data-d="1"]').onclick = () => mover(i, 1);
+    li.querySelector('[data-x]').onclick = () => { lista.splice(i, 1); desenhar(); };
+    return li;
+  }));
+  const pags = lista.reduce((s, it) => s + it.paginas, 0);
+  F.$('#resumo').textContent = lista.length ? `${lista.length} arquivo(s), ${pags} páginas no total.` + (lista.length < 2 ? ' Escolha mais um.' : '') : '';
+  F.$('#juntar').disabled = lista.length < 2;
+}
+
+F.$('#juntar').addEventListener('click', (e) => F.trabalhando(e.currentTarget, async (msg) => {
+  const out = await PDFLib.PDFDocument.create();
+  for (let i = 0; i < lista.length; i++) {
+    msg(`Juntando ${i + 1} de ${lista.length}…`);
+    const src = await F.abrirPdfLib(lista[i].bytes, lista[i].nome);
+    (await out.copyPages(src, src.getPageIndices())).forEach((p) => out.addPage(p));
+  }
+  const bytes = await out.save();
+  F.baixar(new Blob([bytes], { type: 'application/pdf' }), F.nomeBase(lista[0].nome) + '-juntado.pdf');
+  F.toast(`PDF pronto: ${out.getPageCount()} páginas, ${F.tamanho(bytes.length)}.`);
+}));
+</script>
+</body>
+</html>

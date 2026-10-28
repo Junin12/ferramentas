@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Assinar vários PDFs</title>
+<meta name="description" content="A mesma assinatura e carimbo em vários PDFs de uma vez, direto no aparelho.">
+<meta name="theme-color" content="#d93025">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icon-192.png">
+<link rel="stylesheet" href="../comum/base.css">
+<style>
+#pad{width:100%;height:170px;background:#fff;border:1px solid var(--line);border-radius:10px;touch-action:none;display:block}
+.salvas{display:flex;gap:8px;flex-wrap:wrap}
+.salvas button{background:#fff;padding:4px;min-height:52px}
+.salvas button[aria-pressed="true"]{outline:3px solid var(--brand)}
+.salvas img{height:44px;display:block}
+.pos{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-width:300px}
+.pos button[aria-pressed="true"]{border-color:var(--brand);color:var(--brand);font-weight:700}
+.grade2{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+</style>
+</head>
+<body>
+<header class="topo"><div class="in"><a class="voltar" href="../?g=pdf">‹ PDF</a><h1>Assinar vários PDFs</h1></div></header>
+<main class="wrap">
+  <p class="sub">Escolha os PDFs, faça a assinatura uma vez e ela vai no mesmo lugar em todos. Nada é enviado a servidor.</p>
+  <div class="drop" id="drop">
+    <p>Arraste os PDFs para cá ou</p>
+    <label class="btn pri" for="arq">Escolher PDFs</label>
+    <input class="sr" id="arq" type="file" accept="application/pdf,.pdf" multiple>
+  </div>
+  <ol class="lista" id="lista" aria-label="PDFs para assinar"></ol>
+
+  <section class="card">
+    <h2>Assinatura</h2>
+    <div class="salvas" id="salvas" aria-label="Assinaturas guardadas"></div>
+    <canvas id="pad" width="900" height="300" aria-label="Quadro para desenhar a assinatura"></canvas>
+    <div class="row">
+      <button type="button" id="limpar">Limpar</button>
+      <label class="opcoes" style="display:flex"><span><input type="checkbox" id="guardar" checked> Guardar neste aparelho</span></label>
+    </div>
+    <p class="info">As assinaturas guardadas são as mesmas do Editor PDF.</p>
+  </section>
+
+  <section class="card">
+    <h2>Onde vai</h2>
+    <div class="grade2">
+      <label class="campo">Páginas
+        <select id="paginas"><option value="ultima">Só a última</option><option value="primeira">Só a primeira</option><option value="todas">Todas</option></select>
+      </label>
+      <label class="campo">Largura da assinatura (mm)<input id="larg" type="number" min="15" max="150" value="50" inputmode="numeric"></label>
+    </div>
+    <div class="pos" id="pos" role="group" aria-label="Posição na página">
+      <button type="button" data-p="se">↖</button><button type="button" data-p="sc">↑</button><button type="button" data-p="sd">↗</button>
+      <button type="button" data-p="ie">↙</button><button type="button" data-p="ic">↓</button><button type="button" data-p="id" aria-pressed="true">↘</button>
+    </div>
+    <label class="campo">Texto embaixo (opcional)<input id="texto" type="text" maxlength="90" placeholder="Ex.: Eng. Fulano · CREA 000000"></label>
+    <label class="opcoes" style="display:flex"><span><input type="checkbox" id="data" checked> Pôr a data de hoje</span></label>
+  </section>
+</main>
+<div class="acao"><div class="in"><button class="pri" id="gerar" type="button" disabled>Assinar</button></div></div>
+<div id="status" role="status" aria-live="polite"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin="anonymous"></script>
+<script src="../comum/base.js"></script>
+<script>
+'use strict';
+const arquivos = [];
+const ASS_KEY = 'editor-pdf-assinaturas'; // mesma chave do Editor PDF: [{url, ratio}]
+const lerAss = () => { try { return JSON.parse(localStorage.getItem(ASS_KEY)) || []; } catch (e) { return []; } };
+let escolhida = lerAss()[0] || null, posicao = 'id';
+
+// ---------- arquivos ----------
+F.entrada(F.$('#drop'), F.$('#arq'), (fs) => {
+  for (const f of fs) { if (F.ehPdf(f)) arquivos.push(f); else F.toast(`“${f.name}” não é PDF.`, true); }
+  desenharLista();
+});
+function desenharLista() {
+  F.$('#lista').replaceChildren(...arquivos.map((f, k) => {
+    const li = document.createElement('li'); li.className = 'item';
+    li.innerHTML = '<div class="nm"><b></b><small></small></div><button type="button" class="mini" aria-label="Tirar">✕</button>';
+    li.querySelector('b').textContent = f.name; li.querySelector('small').textContent = F.tamanho(f.size);
+    li.querySelector('button').onclick = () => { arquivos.splice(k, 1); desenharLista(); };
+    return li;
+  }));
+  atualizar();
+}
+const atualizar = () => { F.$('#gerar').disabled = !arquivos.length; F.$('#gerar').textContent = arquivos.length > 1 ? `Assinar ${arquivos.length} PDFs` : 'Assinar'; };
+
+// ---------- assinatura ----------
+const pad = F.$('#pad'), pg = pad.getContext('2d');
+let rabiscou = false, traco = null;
+const pt = (e) => { const r = pad.getBoundingClientRect(); return [(e.clientX - r.left) * pad.width / r.width, (e.clientY - r.top) * pad.height / r.height]; };
+pad.addEventListener('pointerdown', (e) => { pad.setPointerCapture(e.pointerId); traco = pt(e); Object.assign(pg, { lineWidth: 7, lineCap: 'round', lineJoin: 'round', strokeStyle: '#0b2a8a' }); });
+pad.addEventListener('pointermove', (e) => { if (!traco) return; const q = pt(e); pg.beginPath(); pg.moveTo(...traco); pg.lineTo(...q); pg.stroke(); traco = q; if (!rabiscou) { rabiscou = true; escolhida = null; desenharSalvas(); } });
+['pointerup', 'pointercancel'].forEach((ev) => pad.addEventListener(ev, () => (traco = null)));
+F.$('#limpar').addEventListener('click', () => { pg.clearRect(0, 0, pad.width, pad.height); rabiscou = false; });
+// recorta a sobra transparente em volta do traço
+function recortar() {
+  const { width: W, height: H } = pad, px = pg.getImageData(0, 0, W, H).data;
+  let x0 = W, y0 = H, x1 = 0, y1 = 0;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (px[(y * W + x) * 4 + 3]) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+  const m = 6, w = x1 - x0 + 1 + 2 * m, h = y1 - y0 + 1 + 2 * m, c = document.createElement('canvas');
+  c.width = w; c.height = h; c.getContext('2d').drawImage(pad, x0 - m, y0 - m, w, h, 0, 0, w, h);
+  return { url: c.toDataURL('image/png'), ratio: h / w };
+}
+function desenharSalvas() {
+  F.$('#salvas').replaceChildren(...lerAss().map((s) => {
+    const b = document.createElement('button'); b.type = 'button'; b.setAttribute('aria-pressed', String(escolhida?.url === s.url)); b.setAttribute('aria-label', 'Usar esta assinatura guardada');
+    const im = document.createElement('img'); im.src = s.url; im.alt = ''; b.append(im);
+    b.onclick = () => { escolhida = s; pg.clearRect(0, 0, pad.width, pad.height); rabiscou = false; desenharSalvas(); };
+    return b;
+  }));
+}
+desenharSalvas();
+document.querySelectorAll('#pos button').forEach((b) => b.addEventListener('click', () => {
+  posicao = b.dataset.p; document.querySelectorAll('#pos button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+}));
+
+// ---------- assinar ----------
+F.$('#gerar').addEventListener('click', () => F.trabalhando(F.$('#gerar'), async (msg) => {
+  if (!F.libs('PDFLib')) return;
+  let ass = escolhida;
+  if (rabiscou) {
+    ass = recortar();
+    if (F.$('#guardar').checked) { try { localStorage.setItem(ASS_KEY, JSON.stringify([ass, ...lerAss().filter((s) => s.url !== ass.url)].slice(0, 4))); } catch (e) { /* segue sem guardar */ } }
+  }
+  if (!ass) return F.toast('Desenhe a assinatura ou escolha uma guardada.', true);
+  const mm = 72 / 25.4, larg = Math.max(15, Math.min(150, +F.$('#larg').value || 50)) * mm, alt = larg * ass.ratio, mg = 14 * mm;
+  const hoje = new Date().toLocaleDateString('pt-BR'), linhas = [F.$('#texto').value.trim(), F.$('#data').checked ? hoje : ''].filter(Boolean);
+  const pngBytes = await (await fetch(ass.url)).arrayBuffer(), saidas = [];
+  for (const [k, f] of arquivos.entries()) {
+    msg(`Assinando ${k + 1} de ${arquivos.length}…`);
+    try {
+      const doc = await F.abrirPdfLib(await F.bytesPdf(f), f.name), png = await doc.embedPng(pngBytes), font = await doc.embedFont(PDFLib.StandardFonts.Helvetica);
+      const safe = (s) => [...s].map((ch) => { try { font.encodeText(ch); return ch; } catch (e) { return '?'; } }).join('');
+      const pgs = doc.getPages(), alvo = F.$('#paginas').value === 'todas' ? pgs : [F.$('#paginas').value === 'primeira' ? pgs[0] : pgs[pgs.length - 1]];
+      for (const p of alvo) {
+        const { width: W, height: H } = p.getSize(), th = linhas.length * 10;
+        const x = posicao.endsWith('e') ? mg : posicao.endsWith('c') ? (W - larg) / 2 : W - mg - larg;
+        const y = posicao.startsWith('s') ? H - mg - alt : mg + th;
+        p.drawImage(png, { x, y, width: larg, height: alt });
+        linhas.forEach((t, i) => { const tx = safe(t), w = font.widthOfTextAtSize(tx, 8); p.drawText(tx, { x: x + (larg - w) / 2, y: y - 9 - i * 10, size: 8, font, color: PDFLib.rgb(0.1, 0.1, 0.1) }); });
+      }
+      saidas.push({ nome: F.nomeBase(f.name) + '_assinado.pdf', bytes: await doc.save() });
+    } catch (e) { F.toast(e.message, true); }
+  }
+  if (!saidas.length) return;
+  if (saidas.length === 1) F.baixar(new Blob([saidas[0].bytes], { type: 'application/pdf' }), saidas[0].nome);
+  else if (window.JSZip) {
+    msg('Juntando no ZIP…'); const z = new JSZip(); saidas.forEach((s) => z.file(s.nome, s.bytes));
+    F.baixar(await z.generateAsync({ type: 'blob' }), `PDFs_assinados_${new Date().toISOString().slice(0, 10)}.zip`);
+  } else for (const s of saidas) F.baixar(new Blob([s.bytes], { type: 'application/pdf' }), s.nome);
+  F.toast(`${saidas.length} PDF${saidas.length > 1 ? 's assinados' : ' assinado'}.`);
+  desenharSalvas();
+}));
+</script>
+</body>
+</html>

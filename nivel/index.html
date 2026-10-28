@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nível e inclinômetro</title>
+<meta name="description" content="Nível de bolha e inclinação em graus e porcentagem com o sensor do celular.">
+<meta name="theme-color" content="#0B7C74">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icon-192.png">
+<link rel="stylesheet" href="../comum/base.css">
+<style>
+:root{--brand:#0B7C74}
+.modo{display:flex;gap:6px}
+.modo button{flex:1}
+.modo button[aria-pressed="true"]{border-color:var(--brand);color:var(--brand);font-weight:700}
+.visor{display:grid;justify-items:center;gap:10px}
+.bolha{position:relative;width:min(78vw,300px);aspect-ratio:1;border-radius:50%;background:radial-gradient(circle,#e9f7d0,#b9dc7e);border:3px solid #6b8f2e}
+.bolha::before,.bolha::after{content:"";position:absolute;background:rgba(0,0,0,.35)}
+.bolha::before{left:50%;top:8%;bottom:8%;width:1px}
+.bolha::after{top:50%;left:8%;right:8%;height:1px}
+.alvo{position:absolute;left:50%;top:50%;width:22%;aspect-ratio:1;border:2px solid rgba(0,0,0,.45);border-radius:50%;transform:translate(-50%,-50%)}
+.gota{position:absolute;left:50%;top:50%;width:18%;aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 35% 35%,#fff,#d4f0a0 60%,#8fbf3a);box-shadow:0 2px 6px rgba(0,0,0,.3);transform:translate(-50%,-50%)}
+.tubo{position:relative;width:min(86vw,340px);height:64px;border-radius:32px;background:linear-gradient(#e9f7d0,#b9dc7e);border:3px solid #6b8f2e}
+.tubo .gota{width:56px;height:40px;aspect-ratio:auto;border-radius:20px}
+.tubo::before,.tubo::after{content:"";position:absolute;top:6px;bottom:6px;width:2px;background:rgba(0,0,0,.4)}
+.tubo::before{left:calc(50% - 34px)} .tubo::after{left:calc(50% + 32px)}
+.num{font-size:44px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1}
+.num.ok{color:var(--ok)}
+.dupla{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;text-align:center}
+.dupla b{font-size:22px;font-variant-numeric:tabular-nums}
+</style>
+</head>
+<body>
+<header class="topo"><div class="in"><a class="voltar" href="../?g=util">‹ Utilidades</a><h1>Nível e inclinômetro</h1></div></header>
+<main class="wrap">
+  <div class="modo" role="group" aria-label="Como usar">
+    <button type="button" data-m="deitado" aria-pressed="true">Deitado (superfície)</button>
+    <button type="button" data-m="borda" aria-pressed="false">Na borda (régua, tubo)</button>
+  </div>
+  <section class="card visor" id="visor">
+    <div class="bolha" id="bolha"><div class="alvo"></div><div class="gota" id="gota"></div></div>
+    <div class="tubo hide" id="tubo"><div class="gota" id="gota2"></div></div>
+    <div class="num" id="num">–</div>
+    <div class="dupla" id="dupla"><div><small class="info">Frente / trás</small><br><b id="ay">–</b></div><div><small class="info">Lados</small><br><b id="ax">–</b></div></div>
+    <p class="info" id="dica">Deite o celular na superfície, com a tela para cima.</p>
+  </section>
+  <div class="row">
+    <button type="button" class="pri" id="iniciar" style="flex:1">Ligar o sensor</button>
+    <button type="button" id="zerar" disabled>Zerar aqui</button>
+    <button type="button" id="travar" disabled>Travar leitura</button>
+  </div>
+  <div class="card hide" id="corrigido">
+    <p class="info" id="corr-txt"></p>
+    <button type="button" id="restaurar">↺ Voltar ao padrão (tirar a correção)</button>
+  </div>
+  <p class="info">Para conferir o celular, meça, gire 180° no mesmo lugar e meça de novo: a média das duas é o valor certo. “Zerar aqui” guarda essa correção neste aparelho.</p>
+</main>
+<div id="status" role="status" aria-live="polite"></div>
+
+<script src="../comum/base.js"></script>
+<script>
+'use strict';
+const ZERO_KEY = 'nivel-zero';
+let modo = 'deitado', g = null, travado = false, ligado = false;
+// correção do "Zerar aqui"; guardada inválida ou absurda (mais de 20°) volta ao padrão
+let zero = (() => { try { const z = JSON.parse(localStorage.getItem(ZERO_KEY)); if (z && ['x', 'y', 'b'].every((k) => Number.isFinite(z[k]) && Math.abs(z[k]) <= 20)) return z; } catch (e) { /* padrão */ } return { x: 0, y: 0, b: 0 }; })();
+const DEG = 180 / Math.PI;
+const fmt = (a) => `${a.toFixed(1).replace('.', ',')}° · ${(Math.tan(Math.abs(a) / DEG) * 100).toFixed(1).replace('.', ',')}%`;
+
+// gravidade suavizada (média móvel) a partir do acelerômetro
+function aoMover(e) {
+  const a = e.accelerationIncludingGravity; if (!a || a.x == null) return;
+  const k = 0.15; g = g ? { x: g.x + (a.x - g.x) * k, y: g.y + (a.y - g.y) * k, z: g.z + (a.z - g.z) * k } : { x: a.x, y: a.y, z: a.z };
+}
+function angulos() {
+  // deitado: inclinação para os lados (x) e frente/trás (y) em relação à tela na horizontal
+  const ax = Math.atan2(g.x, Math.hypot(g.y, g.z)) * DEG - zero.x, ay = Math.atan2(g.y, Math.hypot(g.x, g.z)) * DEG - zero.y;
+  // na borda: ângulo no plano da tela, até o nível ou o prumo mais próximo
+  let b = Math.atan2(g.x, g.y) * DEG; b = ((b % 90) + 90) % 90; if (b > 45) b -= 90; b -= zero.b;
+  return { ax, ay, b, total: Math.atan2(Math.hypot(g.x, g.y), Math.abs(g.z)) * DEG };
+}
+function quadro() { visor(); requestAnimationFrame(quadro); }
+function visor() {
+  if (ligado && g && !travado) {
+    const { ax, ay, b } = angulos(), lim = 10;
+    if (modo === 'deitado') {
+      const t = Math.hypot(ax, ay), cl = (v) => Math.max(-1, Math.min(1, v / lim));
+      // a bolha vai para o lado mais alto (lado direito levantado: x > 0; topo levantado: y > 0, e na tela "para cima" é negativo)
+      F.$('#gota').style.transform = `translate(calc(-50% + ${cl(ax) * 120}%), calc(-50% + ${-cl(ay) * 120}%))`;
+      F.$('#num').textContent = fmt(t); F.$('#num').classList.toggle('ok', t < 0.3);
+      F.$('#ax').textContent = fmt(ax); F.$('#ay').textContent = fmt(ay);
+    } else {
+      const cl = Math.max(-1, Math.min(1, b / 6));
+      F.$('#gota2').style.transform = `translate(calc(-50% + ${cl * 260}%), -50%)`;
+      F.$('#num').textContent = fmt(b); F.$('#num').classList.toggle('ok', Math.abs(b) < 0.2);
+    }
+  }
+}
+async function iniciar() {
+  // iPhone pede autorização com o toque; nos outros a pergunta pode nem existir. Escuta de todo jeito e só avisa se nada chegar.
+  let perm = 'granted';
+  try { if (typeof DeviceMotionEvent?.requestPermission === 'function') perm = await DeviceMotionEvent.requestPermission(); } catch (e) { perm = 'erro'; }
+  addEventListener('devicemotion', aoMover);
+  ligado = true; F.$('#iniciar').hidden = true; F.$('#zerar').disabled = F.$('#travar').disabled = false;
+  setTimeout(() => { if (!g) F.toast(perm === 'denied' ? 'Sensor não autorizado. Libere o acesso ao movimento nas permissões do navegador.' : 'Este aparelho não mandou dados do sensor. Use no celular.', true); }, 2500);
+  navigator.wakeLock?.request('screen').catch(() => {});
+}
+F.$('#iniciar').addEventListener('click', iniciar);
+F.$('#zerar').addEventListener('click', () => {
+  if (!g) return;
+  const z0 = zero; zero = { x: 0, y: 0, b: 0 }; const a = angulos();
+  zero = modo === 'deitado' ? { ...z0, x: a.ax, y: a.ay } : { ...z0, b: a.b };
+  try { localStorage.setItem(ZERO_KEY, JSON.stringify(zero)); } catch (e) { /* vale só agora */ }
+  mostrarCorrecao();
+  F.toast('Zerado: esta posição passa a ser 0°.');
+});
+// correção guardada: aparece com o valor e dá para voltar ao padrão do sensor (sem correção)
+function mostrarCorrecao() {
+  const tem = Math.abs(zero.x) + Math.abs(zero.y) + Math.abs(zero.b) > 0.001, f1 = (v) => v.toFixed(1).replace('.', ',') + '°';
+  F.$('#corrigido').classList.toggle('hide', !tem);
+  F.$('#corr-txt').textContent = `Correção guardada neste aparelho: deitado ${f1(zero.x)} / ${f1(zero.y)} · na borda ${f1(zero.b)}. Se a leitura ficou estranha depois de zerar, volte ao padrão.`;
+}
+F.$('#restaurar').addEventListener('click', () => {
+  zero = { x: 0, y: 0, b: 0 };
+  try { localStorage.removeItem(ZERO_KEY); } catch (e) { /* segue */ }
+  travado = false; F.$('#travar').textContent = 'Travar leitura';
+  mostrarCorrecao(); F.toast('Correção apagada: voltou ao padrão do sensor.');
+});
+mostrarCorrecao();
+F.$('#travar').addEventListener('click', () => { travado = !travado; F.$('#travar').textContent = travado ? 'Destravar' : 'Travar leitura'; });
+document.querySelectorAll('[data-m]').forEach((b) => b.addEventListener('click', () => {
+  modo = b.dataset.m; document.querySelectorAll('[data-m]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  F.$('#bolha').classList.toggle('hide', modo !== 'deitado'); F.$('#dupla').classList.toggle('hide', modo !== 'deitado'); F.$('#tubo').classList.toggle('hide', modo === 'deitado');
+  F.$('#dica').textContent = modo === 'deitado' ? 'Deite o celular na superfície, com a tela para cima.' : 'Apoie a borda comprida (ou a curta) do celular na régua, no tubo ou no batente.';
+}));
+requestAnimationFrame(quadro);
+</script>
+</body>
+</html>

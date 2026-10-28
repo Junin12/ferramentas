@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Medir área no mapa</title>
+<meta name="description" content="Ande pelo terreno com o GPS do celular, marque os vértices ou grave a trilha e veja a área em m² sobre o mapa de satélite.">
+<meta name="theme-color" content="#2E7D4F">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icon-192.png">
+<link rel="stylesheet" href="../comum/base.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{--brand:#2E7D4F;--amarelo:#FFD60A}
+[hidden]{display:none!important}
+html,body{height:100%}
+body{display:flex;flex-direction:column;overflow:hidden}
+.topo .in{max-width:none}
+.topo h1{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.palco{flex:1;min-height:0;position:relative}
+#mapa{position:absolute;inset:0;background:#1b1f24}
+.leaflet-container{font:inherit}
+/* placa com a medida, por cima do mapa */
+#placa{position:absolute;top:8px;left:8px;right:8px;z-index:500;pointer-events:none;display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+#placa>*{pointer-events:auto}
+.medida{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:8px 12px;box-shadow:0 2px 10px #0003;max-width:100%}
+.medida b{font-size:22px;display:block;line-height:1.2}
+.medida small{color:var(--muted);display:block}
+.gps{display:inline-flex;align-items:center;gap:8px;background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:13px;box-shadow:0 2px 10px #0003}
+.gps i{width:10px;height:10px;border-radius:50%;background:#888;flex:none}
+.gps.bom i{background:#1e9e4a}.gps.medio i{background:#f2a516}.gps.ruim i{background:#d93025}
+/* botões flutuantes do mapa (à direita) */
+#flut{position:absolute;right:10px;bottom:34px;z-index:500;display:grid;gap:8px}
+#flut button{width:46px;height:46px;border-radius:50%;padding:0;box-shadow:0 2px 10px #0004;font-size:20px}
+#flut button[aria-pressed="true"]{background:var(--brand);color:#fff;border-color:var(--brand)}
+/* barra de baixo */
+.barra{background:var(--panel);border-top:1px solid var(--line);padding:8px 10px calc(8px + env(safe-area-inset-bottom,0px));display:grid;gap:8px;z-index:600}
+.modos{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;background:var(--bg);border-radius:10px;padding:3px}
+.modos label{display:flex;align-items:center;justify-content:center;min-height:36px;border-radius:8px;cursor:pointer;font-size:14px;text-align:center;line-height:1.1}
+.modos input{position:absolute;opacity:0;pointer-events:none}
+.modos input:checked+span{font-weight:600}
+.modos label:has(input:checked){background:var(--panel);box-shadow:0 1px 3px #0003}
+.modos label:has(input:focus-visible){outline:3px solid var(--focus)}
+.acoes{display:flex;gap:8px}
+.acoes .pri{flex:1;font-size:16px;min-height:48px}
+.acoes button{min-height:48px;min-width:48px}
+.dica{font-size:13px;color:var(--muted);margin:0;text-align:center}
+/* coleta parada num vértice */
+#coleta{position:absolute;left:8px;right:8px;bottom:12px;z-index:700;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px;box-shadow:0 4px 20px #0005;display:grid;gap:8px;max-width:420px;margin:0 auto}
+#coleta progress{width:100%;height:10px;accent-color:var(--brand)}
+#coleta .row button{flex:1}
+/* folhas (menu, lista de áreas) */
+.folha{position:fixed;inset:0;z-index:2000;background:#0007;display:flex;align-items:flex-end;justify-content:center}
+.folha>div{background:var(--bg);width:100%;max-width:560px;max-height:88vh;overflow:auto;border-radius:16px 16px 0 0;padding:14px 14px calc(18px + env(safe-area-inset-bottom,0px));display:grid;gap:12px}
+.folha h2{margin:0;font-size:17px;flex:1}
+.folha .cab{display:flex;align-items:center;gap:8px}
+.grade2{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+.folha button{white-space:normal;line-height:1.2}
+.folha>div>*{min-width:0}
+.perigo{color:#b3261e}
+@media (prefers-color-scheme:dark){.perigo{color:#f28b82}}
+#lista-areas .item{cursor:pointer}
+#lista-areas .item.atual{border-color:var(--brand)}
+/* pontos no mapa */
+.vt{width:22px;height:22px;border-radius:50%;background:var(--amarelo);border:2px solid #222;color:#111;font:700 11px/18px system-ui,sans-serif;text-align:center;box-shadow:0 1px 4px #0008}
+.vt.t{width:12px;height:12px;border-width:2px;font-size:0}
+.vt.m{background:#fff}
+.edit .vt{transform:scale(1.25);cursor:grab}
+.eu{width:18px;height:18px;border-radius:50%;background:#1a73e8;border:3px solid #fff;box-shadow:0 0 0 2px #1a73e855,0 1px 6px #0008}
+.rotulo{background:#000b;color:#fff;border:0;border-radius:6px;padding:2px 6px;font:600 12px system-ui,sans-serif;box-shadow:none;white-space:nowrap}
+.rotulo:before{display:none}
+#status{bottom:200px;z-index:2100}
+</style>
+</head>
+<body>
+<header class="topo"><div class="in">
+  <a class="voltar" href="../?g=mapa">‹ Mapa e coordenadas</a>
+  <h1 id="titulo">Medir área no mapa</h1>
+  <button type="button" class="mini" id="b-areas" title="Minhas áreas">Áreas</button>
+</div></header>
+
+<div class="palco">
+<div id="mapa" role="application" aria-label="Mapa de satélite"></div>
+
+<div id="placa">
+  <div class="gps" id="gps" role="status"><i></i><span id="gps-txt">GPS desligado</span></div>
+  <div class="medida" id="medida" hidden><b id="m-area"></b><small id="m-margem"></small><small id="m-perim"></small></div>
+</div>
+
+<div id="flut">
+  <button type="button" id="b-seguir" title="Seguir minha posição" aria-pressed="false" aria-label="Seguir minha posição">◎</button>
+  <button type="button" id="b-ver" title="Ver a área inteira" aria-label="Ver a área inteira">⤢</button>
+  <button type="button" id="b-camada" title="Trocar mapa: satélite ou ruas" aria-label="Trocar mapa">🗺</button>
+</div>
+
+<div id="coleta" hidden role="dialog" aria-label="Coletando o vértice">
+  <b id="c-tit">Fique parado no vértice…</b>
+  <progress id="c-prog" max="1" value="0"></progress>
+  <small class="info" id="c-info">Aguardando o GPS…</small>
+  <div class="row"><button type="button" id="c-cancelar">Cancelar</button><button type="button" class="pri" id="c-usar" disabled>Usar agora</button></div>
+</div>
+
+</div>
+
+<div class="barra">
+  <div class="modos" role="radiogroup" aria-label="Como marcar a área">
+    <label><input type="radio" name="modo" value="v" checked><span>Vértices</span></label>
+    <label><input type="radio" name="modo" value="t"><span>Trilha andando</span></label>
+    <label><input type="radio" name="modo" value="m"><span>Tocar no mapa</span></label>
+  </div>
+  <p class="dica" id="dica"></p>
+  <div class="acoes">
+    <button type="button" id="b-desfazer" title="Desfazer o último ponto" aria-label="Desfazer o último ponto">↶</button>
+    <button type="button" class="pri" id="b-acao">Marcar vértice</button>
+    <button type="button" id="b-menu" title="Salvar, exportar e opções" aria-label="Exportar e opções">⋯</button>
+  </div>
+</div>
+
+<div class="folha" id="menu" hidden>
+  <div role="dialog" aria-labelledby="menu-tit">
+    <div class="cab"><h2 id="menu-tit">Esta área</h2><button type="button" class="mini" data-fechar>✕</button></div>
+    <label class="campo">Nome<input id="nome" maxlength="80" autocomplete="off"></label>
+    <p class="info" id="resumo"></p>
+    <h2>Exportar</h2>
+    <div class="grade2" id="exportar">
+      <button type="button" data-fmt="pdf">PDF com mapa</button>
+      <button type="button" data-fmt="png">Imagem (PNG)</button>
+      <button type="button" data-fmt="jpg">Imagem (JPG)</button>
+      <button type="button" data-fmt="kml">Google Earth (KML)</button>
+      <button type="button" data-fmt="dxf">CAD (DXF em UTM)</button>
+      <button type="button" data-fmt="csv">Planilha (CSV)</button>
+    </div>
+    <h2>Opções</h2>
+    <label class="campo">Trilha: gravar um ponto a cada
+      <select id="op-intervalo"><option value="2">2 segundos</option><option value="3">3 segundos</option><option value="5" selected>5 segundos</option><option value="10">10 segundos</option><option value="15">15 segundos</option><option value="30">30 segundos</option></select>
+    </label>
+    <label class="campo">Vértice: tempo parado para a média
+      <select id="op-tempo"><option value="10">10 segundos</option><option value="20" selected>20 segundos</option><option value="30">30 segundos</option><option value="60">1 minuto</option></select>
+    </label>
+    <label class="campo">Ignorar leituras com imprecisão maior que
+      <select id="op-limite"><option value="5">5 m</option><option value="10">10 m</option><option value="15" selected>15 m</option><option value="25">25 m</option><option value="50">50 m</option></select>
+    </label>
+    <button type="button" id="b-offline">Guardar o mapa desta região para usar sem internet</button>
+    <div class="row">
+      <button type="button" id="b-nova" style="flex:1">Nova área</button>
+      <button type="button" id="b-apagar" class="perigo" style="flex:1">Apagar esta área</button>
+    </div>
+    <p class="info">A área é calculada sobre o elipsoide do SIRGAS 2000 (área real do terreno, em projeção horizontal). A margem considera a precisão de cada ponto informada pelo GPS, com 95% de confiança. As áreas ficam guardadas só neste aparelho.</p>
+  </div>
+</div>
+
+<div class="folha" id="areas" hidden>
+  <div role="dialog" aria-labelledby="areas-tit">
+    <div class="cab"><h2 id="areas-tit">Minhas áreas</h2><button type="button" class="mini" data-fechar>✕</button></div>
+    <ul class="lista" id="lista-areas"></ul>
+    <button type="button" class="pri" id="b-nova2">Nova área</button>
+  </div>
+</div>
+
+<div id="status" role="status" aria-live="polite"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="../comum/base.js"></script>
+<script src="geo.js"></script>
+<script src="app.js"></script>
+<script src="exportar.js"></script>
+</body>
+</html>

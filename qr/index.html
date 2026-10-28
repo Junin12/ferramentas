@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ler QR e código de barras</title>
+<meta name="description" content="Leia QR code, código de barras e a chave da NF-e com a câmera do celular.">
+<meta name="theme-color" content="#5A3FB0">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icon-192.png">
+<link rel="stylesheet" href="../comum/base.css">
+<style>
+:root{--brand:#5A3FB0}
+.camera{position:relative;background:#000;border-radius:14px;overflow:hidden;aspect-ratio:3/4;max-height:60vh;justify-self:center;width:100%}
+.camera video{width:100%;height:100%;object-fit:cover;display:block}
+.mira{position:absolute;inset:18% 12%;border:3px solid rgba(255,255,255,.85);border-radius:16px;box-shadow:0 0 0 999px rgba(0,0,0,.35)}
+.resultado b{font-size:17px;word-break:break-all;color:var(--ink)}
+.chave{font-family:ui-monospace,Consolas,monospace;font-size:15px;letter-spacing:.5px;word-break:break-word}
+dl{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;margin:0}
+dt{color:var(--muted)} dd{margin:0}
+</style>
+</head>
+<body>
+<header class="topo"><div class="in"><a class="voltar" href="../?g=util">‹ Utilidades</a><h1>Ler QR e código de barras</h1></div></header>
+<main class="wrap">
+  <p class="sub">Aponte a câmera para o QR code, o código de barras da DANFE ou de uma etiqueta.</p>
+  <div class="camera hide" id="camera"><video id="video" playsinline muted></video><div class="mira"></div></div>
+  <div class="row">
+    <button type="button" class="pri" id="ligar" style="flex:1">📷 Abrir a câmera</button>
+    <label class="btn" for="foto">Ler de uma foto</label>
+    <input class="sr" id="foto" type="file" accept="image/*">
+  </div>
+  <p class="info" id="aviso"></p>
+  <section class="card resultado hide" id="resultado" aria-live="polite"></section>
+  <section class="card hide" id="recentes"><h2>Lidos neste aparelho</h2><ul class="lista" id="lista"></ul></section>
+</main>
+<div id="status" role="status" aria-live="polite"></div>
+
+<script src="../comum/base.js"></script>
+<script>
+'use strict';
+const CHAVE = 'qr-recentes';
+const video = F.$('#video');
+let leitor = null, fluxo = null, rodando = false;
+
+// BarcodeDetector (Chrome no Android): QR e códigos de barras. Sem ele (iPhone): jsQR, só QR.
+async function prepararLeitor() {
+  if (leitor) return leitor;
+  if ('BarcodeDetector' in window) {
+    const fmts = await BarcodeDetector.getSupportedFormats().catch(() => []);
+    const quero = ['qr_code', 'code_128', 'ean_13', 'ean_8', 'code_39', 'itf', 'data_matrix', 'pdf417', 'upc_a'].filter((f) => fmts.includes(f));
+    if (quero.length) { const d = new BarcodeDetector({ formats: quero }); return (leitor = async (img) => (await d.detect(img))[0]?.rawValue || null); }
+  }
+  await new Promise((ok, erro) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js'; s.onload = ok; s.onerror = erro; document.head.append(s); });
+  F.$('#aviso').textContent = 'Neste aparelho dá para ler só QR code (código de barras precisa do Chrome no Android).';
+  const c = document.createElement('canvas'), g = c.getContext('2d', { willReadFrequently: true });
+  return (leitor = async (img) => {
+    const w = img.videoWidth || img.width, h = img.videoHeight || img.height, k = Math.min(1, 900 / Math.max(w, h));
+    c.width = Math.round(w * k); c.height = Math.round(h * k); g.drawImage(img, 0, 0, c.width, c.height);
+    return window.jsQR(g.getImageData(0, 0, c.width, c.height).data, c.width, c.height)?.data || null;
+  });
+}
+
+async function ligar() {
+  if (rodando) return desligar();
+  try {
+    await prepararLeitor();
+    fluxo = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment', width: { ideal: 1280 } }, audio: false });
+  } catch (e) { return F.toast(e.name === 'NotAllowedError' ? 'Câmera não autorizada. Libere nas permissões do navegador.' : 'Não consegui abrir a câmera.', true); }
+  video.srcObject = fluxo; await video.play();
+  F.$('#camera').classList.remove('hide'); F.$('#ligar').textContent = '⏹ Fechar a câmera'; rodando = true;
+  const passo = async () => {
+    if (!rodando) return;
+    try { const t = video.readyState >= 2 ? await leitor(video) : null; if (t) { navigator.vibrate?.(80); mostrar(t); return desligar(); } } catch (e) { /* tenta de novo */ }
+    setTimeout(passo, 180);
+  };
+  passo();
+}
+function desligar() {
+  rodando = false; fluxo?.getTracks().forEach((t) => t.stop()); fluxo = null;
+  F.$('#camera').classList.add('hide'); F.$('#ligar').textContent = '📷 Ler outro';
+}
+F.$('#ligar').addEventListener('click', ligar);
+F.$('#foto').addEventListener('change', async (e) => {
+  const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+  try { await prepararLeitor(); const bmp = await createImageBitmap(f); const t = await leitor(bmp); t ? mostrar(t) : F.toast('Nenhum código encontrado na foto. Tente mais perto e com luz.', true); }
+  catch (err) { F.toast('Não consegui ler a foto.', true); }
+});
+
+// chave de acesso da NF-e / CT-e (44 dígitos): UF, emissão, CNPJ, modelo, série, número
+const UF = { 11: 'RO', 12: 'AC', 13: 'AM', 14: 'RR', 15: 'PA', 16: 'AP', 17: 'TO', 21: 'MA', 22: 'PI', 23: 'CE', 24: 'RN', 25: 'PB', 26: 'PE', 27: 'AL', 28: 'SE', 29: 'BA',
+  31: 'MG', 32: 'ES', 33: 'RJ', 35: 'SP', 41: 'PR', 42: 'SC', 43: 'RS', 50: 'MS', 51: 'MT', 52: 'GO', 53: 'DF' };
+function chaveNfe(t) {
+  const d = String(t).replace(/\D/g, '').match(/\d{44}/)?.[0]; if (!d) return null;
+  // dígito verificador (módulo 11)
+  let s = 0, p = 2; for (let i = 42; i >= 0; i--) { s += +d[i] * p; p = p === 9 ? 2 : p + 1; }
+  const r = s % 11, dv = r < 2 ? 0 : 11 - r;
+  const cnpj = d.slice(6, 20), mod = { 55: 'NF-e', 65: 'NFC-e', 57: 'CT-e', 58: 'MDF-e' }[d.slice(20, 22)] || 'modelo ' + d.slice(20, 22);
+  return { d, ok: dv === +d[43], uf: UF[d.slice(0, 2)] || d.slice(0, 2), emissao: d.slice(4, 6) + '/20' + d.slice(2, 4), mod, serie: +d.slice(22, 25), num: +d.slice(25, 34),
+    cnpj: `${cnpj.slice(0, 2)}.${cnpj.slice(2, 5)}.${cnpj.slice(5, 8)}/${cnpj.slice(8, 12)}-${cnpj.slice(12)}` };
+}
+function mostrar(t, semGuardar) {
+  const box = F.$('#resultado'); box.classList.remove('hide'); box.replaceChildren();
+  const nfe = chaveNfe(t), url = /^https?:\/\//i.test(t.trim()) ? t.trim() : null;
+  const h = document.createElement('h2'); h.textContent = nfe ? `Chave de ${nfe.mod}` : url ? 'Link' : 'Texto lido'; box.append(h);
+  if (nfe) {
+    const c = document.createElement('p'); c.className = 'chave'; c.textContent = nfe.d.match(/\d{4}/g).join(' '); box.append(c);
+    const dl = document.createElement('dl');
+    for (const [a, b] of [['Número', `${nfe.num} · série ${nfe.serie}`], ['Emitente (CNPJ)', nfe.cnpj], ['Emissão', nfe.emissao], ['UF', nfe.uf], ['Conferência', nfe.ok ? 'dígito verificador certo' : 'dígito verificador NÃO confere: leia de novo']]) {
+      const dt = document.createElement('dt'), dd = document.createElement('dd'); dt.textContent = a; dd.textContent = b; dl.append(dt, dd); }
+    box.append(dl);
+  } else { const b = document.createElement('b'); b.textContent = t; box.append(b); }
+  const row = document.createElement('div'); row.className = 'row';
+  const copiar = document.createElement('button'); copiar.type = 'button'; copiar.textContent = nfe ? 'Copiar a chave' : 'Copiar';
+  copiar.onclick = () => navigator.clipboard?.writeText(nfe ? nfe.d : t).then(() => F.toast('Copiado.'), () => F.toast('Não consegui copiar.', true));
+  row.append(copiar);
+  if (url) { const a = document.createElement('a'); a.className = 'btn pri'; a.href = url; a.target = '_blank'; a.rel = 'noopener'; a.textContent = 'Abrir o link'; a.style.cssText = 'padding:8px 12px;border-radius:8px;text-decoration:none'; row.append(a); }
+  if (navigator.share) { const s = document.createElement('button'); s.type = 'button'; s.textContent = 'Compartilhar'; s.onclick = () => navigator.share({ text: nfe ? nfe.d : t }).catch(() => {}); row.append(s); }
+  box.append(row);
+  if (!semGuardar) guardar(t);
+  box.scrollIntoView({ behavior: 'smooth' });
+}
+const recentes = () => { try { return JSON.parse(localStorage.getItem(CHAVE)) || []; } catch (e) { return []; } };
+function guardar(t) {
+  const l = [{ t, em: Date.now() }, ...recentes().filter((x) => x.t !== t)].slice(0, 20);
+  try { localStorage.setItem(CHAVE, JSON.stringify(l)); } catch (e) { /* segue */ }
+  desenharRecentes();
+}
+function desenharRecentes() {
+  const l = recentes(); F.$('#recentes').classList.toggle('hide', !l.length);
+  F.$('#lista').replaceChildren(...l.map((x) => {
+    const li = document.createElement('li'); li.className = 'item';
+    li.innerHTML = '<div class="nm"><b></b><small></small></div><button type="button" class="mini">Ver</button>';
+    const n = chaveNfe(x.t); li.querySelector('b').textContent = n ? `${n.mod} nº ${n.num} · ${n.cnpj}` : x.t;
+    li.querySelector('small').textContent = new Date(x.em).toLocaleString('pt-BR');
+    li.querySelector('button').onclick = () => mostrar(x.t, true);
+    return li;
+  }));
+}
+desenharRecentes();
+</script>
+</body>
+</html>

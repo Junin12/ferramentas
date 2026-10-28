@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NBR 9649 em cards</title>
+<meta name="description" content="Redes coletoras de esgoto: vazões, diâmetro mínimo, tensão trativa, declividade, lâmina, velocidade, recobrimento e PV, em desenhos.">
+<meta name="theme-color" content="#2F5D62">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icon-192.png">
+<link rel="stylesheet" href="../comum/base.css">
+<link rel="stylesheet" href="../comum/normas.css">
+</head>
+<body>
+<header class="topo"><div class="in"><a class="voltar" href="../?g=normas">‹ Normas</a><h1>NBR 9649 em cards</h1></div></header>
+<main class="wrap">
+  <p class="aviso">Resumo da ABNT NBR 9649 (projeto de redes coletoras de esgoto sanitário). Para consulta rápida: confira na norma oficial e nas exigências da concessionária.</p>
+  <div class="filtros" role="toolbar" aria-label="Filtrar por tema"><input id="q" type="search" placeholder="Buscar: declividade, lâmina, PV…" aria-label="Buscar nos cards"></div>
+<div class="grade">
+
+<article class="cn">
+  <header><span class="tag">Vazão</span><span class="sec">NBR 9649</span></header>
+  <h2>Vazão de esgoto</h2>
+  <div class="corpo">
+    <div class="f">Q = C·K1·K2·P·q / 86400 + Qinf    (L/s)
+C  = 0,8   retorno água → esgoto
+K1 = 1,2   dia de maior consumo
+K2 = 1,5   hora de maior consumo
+q  = consumo (L/hab·dia) · P = população</div>
+    <div class="chips"><span>vazão mínima de cálculo: <b>1,5 L/s</b> por trecho</span><span>início (Qi) e fim de plano (Qf)</span></div>
+  </div>
+  <div class="dica">Use a taxa de infiltração e o consumo per capita adotados pela concessionária local.</div>
+</article>
+
+<article class="cn">
+  <header><span class="tag">Hidráulica</span><span class="sec">NBR 9649</span></header>
+  <h2>Autolimpeza: tensão trativa</h2>
+  <div class="corpo">
+    <svg class="ill" viewBox="0 0 320 120" role="img" aria-label="Tensão trativa mínima de 1,0 pascal para arrastar o sedimento; declividade mínima igual a 0,0055 vezes Qi elevado a menos 0,47">
+      <circle cx="80" cy="60" r="44" fill="none" stroke="var(--ink)" stroke-width="3"/>
+      <path class="ag" d="M45 86a44 44 0 0 0 70 0z" opacity=".75"/>
+      <g class="te2"><circle cx="66" cy="98" r="3"/><circle cx="80" cy="100" r="3"/><circle cx="94" cy="98" r="3"/></g>
+      <path class="dim" d="M54 98H24" marker-end="url(#sa)"/>
+      <text x="150" y="40" class="b">σ ≥ 1,0 Pa</text><text x="150" y="56" class="p">arrasta o sedimento</text>
+      <text x="150" y="86" class="a">I mín = 0,0055·Qi^−0,47</text><text x="150" y="102" class="p">m/m, Qi em L/s</text>
+    </svg>
+    <div class="calc" data-calc="declividade"></div>
+  </div>
+  <div class="dica">Com Qi = 1,5 L/s, I mín ≈ 0,0045 m/m (0,45%).</div>
+</article>
+
+<article class="cn">
+  <header><span class="tag">Hidráulica</span><span class="sec">NBR 9649</span></header>
+  <h2>Lâmina e velocidade</h2>
+  <div class="corpo">
+    <svg class="ill" viewBox="0 0 320 120" role="img" aria-label="Lâmina máxima 75% do diâmetro; se a velocidade passar da crítica, lâmina até 50%; velocidade máxima 5 m/s">
+      <path class="ag" d="M23.6 35H96.4A42 42 0 1 1 23.6 35z" opacity=".75"/>
+      <circle cx="60" cy="56" r="42" fill="none" stroke="var(--ink)" stroke-width="3"/>
+      <path class="dim" d="M110 36V97" marker-start="url(#sa)" marker-end="url(#sa)"/><text x="116" y="70" class="a">y ≤ 0,75·D</text>
+      <text x="184" y="80" class="b">v &gt; v crítica</text><text x="184" y="94" class="a">y ≤ 0,50·D</text>
+      <text x="184" y="20" class="b">v máx 5 m/s</text>
+      <text x="184" y="50" class="p">vc = 6·√(g·RH)</text>
+    </svg>
+  </div>
+  <div class="dica">Tubo sempre com folga de ar: esgoto cheio até em cima não ventila e gera gás.</div>
+</article>
+
+<article class="cn">
+  <header><span class="tag">Projeto</span><span class="sec">NBR 9649</span></header>
+  <h2>Diâmetro e recobrimento</h2>
+  <div class="corpo">
+    <svg class="ill" viewBox="0 -6 320 134" role="img" aria-label="Diâmetro mínimo DN 100; recobrimento mínimo 0,90 m sob a pista e 0,65 m sob o passeio">
+      <rect class="te" x="0" y="20" width="320" height="108"/><rect class="ink" x="0" y="14" width="190" height="6"/><rect class="cc2" x="190" y="10" width="130" height="10"/>
+      <circle class="ags" cx="90" cy="96" r="12" style="stroke:var(--agua);stroke-width:3"/><circle class="ags" cx="256" cy="80" r="12" style="stroke:var(--agua);stroke-width:3"/>
+      <path class="dim" d="M110 21V83" marker-start="url(#sa)" marker-end="url(#sa)"/><text x="116" y="56" class="a">≥ 0,90 m</text><text x="95" y="8" class="b">pista</text>
+      <path class="dim" d="M276 21V67" marker-start="url(#sa)" marker-end="url(#sa)"/><text x="232" y="44" class="a">≥ 0,65</text><text x="230" y="8" class="b">passeio</text>
+      <text x="40" y="122" class="u">DN mín 100</text>
+    </svg>
+  </div>
+  <div class="dica">Recobrimento menor só com proteção do tubo (laje ou envelope de concreto) justificada no projeto.</div>
+</article>
+
+<article class="cn">
+  <header><span class="tag">Projeto</span><span class="sec">NBR 9649</span></header>
+  <h2>PV, TL e TIL</h2>
+  <div class="corpo">
+    <svg class="ill" viewBox="0 0 320 120" role="img" aria-label="Poço de visita nas mudanças de direção, declividade, diâmetro e material e no encontro de coletores; distância entre singularidades limitada pelo equipamento de desobstrução">
+      <path class="agl" d="M20 70H140L210 30M140 70L210 100" style="stroke-width:4"/>
+      <rect class="cc2" x="128" y="56" width="24" height="28" rx="4"/><text x="140" y="104" text-anchor="middle" class="b">PV</text>
+      <rect class="cc" x="18" y="62" width="10" height="16"/><text x="23" y="96" text-anchor="middle" class="p">TL</text>
+      <text x="220" y="26" class="p">direção</text><text x="220" y="104" class="p">encontro</text>
+      <path class="dim" d="M29 50H127" marker-start="url(#sa)" marker-end="url(#sa)"/><text x="78" y="44" text-anchor="middle" class="a">alcance da limpeza</text>
+    </svg>
+    <div class="chips"><span>PV: mudança de <b>direção, declividade, DN, material</b></span><span>TL / TIL: terminal e inspeção</span></div>
+  </div>
+  <div class="dica">Usualmente fica entre 80 e 100 m. Confira o limite com o equipamento de hidrojateamento da concessionária.</div>
+</article>
+
+</div>
+<p class="vazio hide" id="vazio">Nenhum card encontrado. Tente outra palavra ou volte para "Todos".</p>
+</main>
+<div id="status" role="status" aria-live="polite"></div>
+<script src="../comum/base.js"></script>
+<script src="../comum/normas.js"></script>
+</body>
+</html>

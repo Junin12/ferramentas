@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Editor PDF</title>
+<meta name="description" content="Edite PDF no navegador: escreva, marque, apague, insira imagens e converta para Word.">
+<meta name="theme-color" content="#d93025">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icon-192.png">
+<style>
+:root{
+  --bg:#eef0f3; --panel:#fff; --ink:#1d2330; --muted:#5b6475; --line:#d9dde4;
+  --brand:#d93025; --brand-ink:#fff; --focus:#1a73e8;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#14171c;--panel:#1f242c;--ink:#e8eaee;--muted:#a0a8b6;--line:#343b47;--focus:#8ab4f8}
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{font:15px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);display:flex;flex-direction:column}
+header{background:var(--panel);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:20}
+.bar{display:flex;gap:6px;align-items:center;padding:8px 10px;overflow-x:auto;scrollbar-width:thin}
+.bar + .bar{border-top:1px solid var(--line)}
+.brand{font-weight:700;margin-right:6px;white-space:nowrap}
+.brand b{color:var(--brand)}
+.voltar{color:var(--muted);text-decoration:none;white-space:nowrap;padding:7px 4px;min-height:38px;display:inline-flex;align-items:center}
+.voltar:hover{color:var(--ink)}
+button,label.btn{font:inherit;color:inherit;background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 11px;cursor:pointer;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;min-height:38px}
+button:hover:not(:disabled),label.btn:hover{background:var(--bg)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button[aria-pressed="true"]{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+button.primary{background:var(--brand);color:var(--brand-ink);border-color:var(--brand)}
+button.primary:hover:not(:disabled){filter:brightness(.93);background:var(--brand)}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.sep{width:1px;align-self:stretch;background:var(--line);margin:0 4px;flex:none}
+input[type=color]{width:38px;height:38px;padding:2px;border:1px solid var(--line);border-radius:8px;background:var(--panel);cursor:pointer}
+.field{display:inline-flex;align-items:center;gap:5px;color:var(--muted);font-size:13px;white-space:nowrap}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+main{flex:1;overflow:auto;position:relative;padding-bottom:60px}
+#empty{max-width:520px;margin:12vh auto 0;text-align:center;padding:24px}
+#empty h1{margin:0 0 8px;font-size:24px}
+#empty p{color:var(--muted);margin:0 0 20px}
+#drop{border:2px dashed var(--line);border-radius:14px;padding:30px 16px;background:var(--panel)}
+#drop.over{border-color:var(--brand)}
+#pages{padding:8px 0}
+.page{position:relative;margin:12px auto;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,.25)}
+.page canvas{display:block}
+.overlay{position:absolute;inset:0;overflow:hidden}
+.tool-text .overlay{cursor:text}
+.tool-hl .overlay,.tool-erase .overlay,.tool-ink .overlay{cursor:crosshair;touch-action:none}
+.ann{position:absolute}
+.tool-select .ann{pointer-events:auto;cursor:move;touch-action:none}
+.ann{pointer-events:none}
+.ann.sel{outline:2px solid var(--focus);outline-offset:1px}
+.ann.hl{mix-blend-mode:multiply}
+.ann.erase{background:#fff}
+.ann.txt{white-space:pre;line-height:1.2;font-family:Helvetica,Arial,sans-serif;min-width:8px;min-height:1.2em}
+.ann.txt[contenteditable]{outline:2px dashed var(--focus);background:rgba(255,255,255,.7);cursor:text}
+.ann.img{object-fit:fill;user-select:none;-webkit-user-drag:none}
+.inkbox{position:absolute;left:0;top:0;pointer-events:none;overflow:visible}
+.inkbox polyline{fill:none;stroke-linecap:round;stroke-linejoin:round}
+.tool-select .inkbox polyline{pointer-events:stroke;cursor:move}
+.inkbox polyline.sel{filter:drop-shadow(0 0 3px var(--focus))}
+.handle{position:absolute;right:-7px;bottom:-7px;width:14px;height:14px;background:var(--focus);border:2px solid #fff;border-radius:50%;cursor:nwse-resize;pointer-events:auto;touch-action:none}
+#status{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);max-width:92vw;background:var(--ink);color:var(--panel);padding:10px 14px;border-radius:10px;font-size:14px;z-index:50;display:none}
+#status.err{background:#b3261e;color:#fff}
+#status.show{display:block}
+progress{width:140px}
+.hide,[hidden]{display:none!important}
+/* janelas: organizar páginas e assinatura */
+dialog{border:0;border-radius:14px;padding:0;background:var(--panel);color:var(--ink);width:min(720px,94vw);max-height:92vh}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+.dlg{padding:14px;display:grid;gap:10px}
+.dlg h2{margin:0;font-size:17px}
+.dlg-bt{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.dlg-bt .esp{flex:1}
+.dica{margin:0;color:var(--muted);font-size:13px}
+#pag-grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:10px;max-height:62vh;overflow:auto;padding:2px}
+.pg{border:1px solid var(--line);border-radius:10px;padding:6px;display:grid;gap:4px;justify-items:center;background:var(--bg)}
+.pg.del .th,.pg.del b{opacity:.4}
+.pg.del b{text-decoration:line-through}
+.pg .th{width:110px;height:110px;display:grid;place-items:center}
+.pg .th canvas{background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.3);transition:transform .15s}
+.pg-bt{display:flex;flex-wrap:wrap;gap:3px;justify-content:center}
+.pg-bt button{min-height:34px;padding:3px 8px}
+#ass-tela{width:100%;aspect-ratio:3/1;background:#fff;border:1px dashed var(--muted);border-radius:10px;touch-action:none;cursor:crosshair}
+.ass-salvas{display:flex;gap:12px;flex-wrap:wrap}
+.ass-salvas .s{position:relative}
+.ass-salvas .usa{background:#fff;padding:4px 8px;height:58px}
+.ass-salvas img{height:48px;max-width:180px;object-fit:contain}
+.ass-salvas .x{position:absolute;top:-9px;right:-9px;min-height:26px;width:26px;padding:0;border-radius:50%;justify-content:center}
+/* campos de formulário do PDF (camada do pdf.js); só recebem toque com a ferramenta Preencher */
+.page .annotationLayer{position:absolute;left:0;top:0}
+.annotationLayer section{position:absolute}
+.annotationLayer :is(input,textarea,select){position:absolute;inset:0;width:100%;height:100%;margin:0;padding:0 2px;border:1px solid transparent;
+  background:rgba(0,84,255,.13);font:calc(9px * var(--scale-factor)) Helvetica,Arial,sans-serif;color:#000;box-sizing:border-box}
+.annotationLayer textarea{resize:none}
+.annotationLayer :is(input,textarea,select):focus{background:transparent;border-color:var(--focus)}
+.tool-form .overlay{pointer-events:none}
+</style>
+</head>
+<body>
+<header>
+  <div class="bar">
+    <a class="voltar" href="../?g=pdf" aria-label="Voltar para as ferramentas de PDF">‹ PDF</a>
+    <span class="brand">Editor <b>PDF</b></span>
+    <label class="btn" for="file">Abrir PDF</label>
+    <input class="sr" id="file" type="file" accept="application/pdf,.pdf">
+    <button id="save" class="primary" disabled>Salvar PDF</button>
+    <button id="toword" disabled>Converter p/ Word</button>
+    <button id="paginas" disabled>Páginas</button>
+    <span id="progress" class="hide"><progress id="prog" max="100" value="0"></progress></span>
+  </div>
+  <div class="bar" role="toolbar" aria-label="Ferramentas de edição">
+    <button data-tool="form" aria-pressed="false" disabled hidden>Preencher</button>
+    <button data-tool="select" aria-pressed="true" disabled>Selecionar</button>
+    <button data-tool="text" aria-pressed="false" disabled>Texto</button>
+    <button data-tool="hl" aria-pressed="false" disabled>Marca-texto</button>
+    <button data-tool="erase" aria-pressed="false" disabled>Apagar (tarja)</button>
+    <button data-tool="ink" aria-pressed="false" disabled>Desenhar</button>
+    <label class="btn" id="imglabel" for="imgfile" aria-disabled="true">Imagem</label>
+    <input class="sr" id="imgfile" type="file" accept="image/*" disabled>
+    <button id="assinar" disabled>Assinatura</button>
+    <span class="sep"></span>
+    <label class="field">Cor <input type="color" id="color" value="#111111"></label>
+    <label class="field">Marca <input type="color" id="hlcolor" value="#ffeb3b"></label>
+    <button id="smaller" disabled aria-label="Diminuir tamanho">A−</button>
+    <button id="bigger" disabled aria-label="Aumentar tamanho">A+</button>
+    <span class="sep"></span>
+    <button id="undo" disabled>Desfazer</button>
+    <button id="del" disabled>Excluir</button>
+    <span class="sep"></span>
+    <button id="zout" disabled aria-label="Diminuir zoom">−</button>
+    <span class="field" id="zlabel">120%</span>
+    <button id="zin" disabled aria-label="Aumentar zoom">+</button>
+  </div>
+</header>
+
+<main id="main">
+  <section id="empty">
+    <h1>Edite seu PDF aqui</h1>
+    <p>Escreva por cima, assine, preencha formulários, organize as páginas e converta para Word. Tudo roda no seu aparelho: o arquivo não é enviado a nenhum servidor.</p>
+    <div id="drop">
+      <p>Arraste um PDF para cá ou</p>
+      <label class="btn primary" for="file" style="background:var(--brand);color:#fff;border-color:var(--brand)">Escolher arquivo</label>
+    </div>
+  </section>
+  <div id="pages"></div>
+</main>
+<div id="status" role="status" aria-live="polite"></div>
+
+<dialog id="dlg-pag" aria-labelledby="dlg-pag-tit">
+  <form method="dialog" class="dlg">
+    <h2 id="dlg-pag-tit">Organizar páginas</h2>
+    <p class="dica">Gire, mude de lugar ou marque para excluir. Nada muda até você tocar em Aplicar.</p>
+    <div id="pag-grade"></div>
+    <div class="dlg-bt"><span class="esp"></span><button value="cancel">Cancelar</button><button type="button" id="pag-ok" class="primary">Aplicar</button></div>
+  </form>
+</dialog>
+
+<dialog id="dlg-ass" aria-labelledby="dlg-ass-tit">
+  <form method="dialog" class="dlg">
+    <h2 id="dlg-ass-tit">Assinatura</h2>
+    <p class="dica" id="ass-salvas-tit">Guardadas neste aparelho (toque para usar):</p>
+    <div class="ass-salvas" id="ass-salvas"></div>
+    <p class="dica">Desenhe com o dedo ou o mouse (usa a cor escolhida em Cor):</p>
+    <canvas id="ass-tela" width="900" height="300"></canvas>
+    <div class="dlg-bt">
+      <button type="button" id="ass-limpar">Limpar</button>
+      <label class="field"><input type="checkbox" id="ass-guardar" checked> Guardar para usar de novo</label>
+      <span class="esp"></span>
+      <button value="cancel">Cancelar</button><button type="button" id="ass-usar" class="primary">Inserir</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" crossorigin="anonymous"></script>
+<script src="lib.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

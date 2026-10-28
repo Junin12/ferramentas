@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conversar no WhatsApp</title>
+<meta name="description" content="Abra uma conversa no WhatsApp com qualquer número, sem salvar o contato.">
+<meta name="theme-color" content="#0B7A6C">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icon-192.png">
+<link rel="stylesheet" href="../comum/base.css">
+<style>
+:root{--brand:#0B7A6C}
+.campo textarea{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%;resize:vertical;min-height:70px}
+.tel{display:flex;gap:8px}
+.tel input{flex:1;font-size:20px;letter-spacing:.5px}
+#previa{min-height:20px}
+#previa.err{color:#b3261e}
+@media (prefers-color-scheme:dark){#previa.err{color:#f28b82}}
+a.pri{text-decoration:none;font:inherit;border:1px solid;border-radius:8px;padding:8px 12px;min-height:42px;display:inline-flex;align-items:center;justify-content:center}
+a.mini{min-height:36px;padding:4px 14px}
+a.pri[aria-disabled="true"]{opacity:.45;pointer-events:none}
+</style>
+</head>
+<body>
+<header class="topo"><div class="in"><a class="voltar" href="../?g=util">‹ Utilidades</a><h1>Conversar no WhatsApp</h1></div></header>
+<main class="wrap">
+  <p class="sub">Digite o número e a conversa abre direto no WhatsApp, sem precisar salvar o contato.</p>
+  <form class="card" id="form" novalidate>
+    <label class="campo" for="num">Número com DDD
+      <span class="tel">
+        <input id="num" type="tel" inputmode="tel" autocomplete="tel" placeholder="(11) 99999-9999" autofocus>
+        <button type="button" id="colar" class="hide">Colar</button>
+      </span>
+    </label>
+    <p class="info" id="previa" aria-live="polite">Número de outro país: comece com + e o código do país.</p>
+    <label class="campo" for="msg">Mensagem (opcional)
+      <textarea id="msg" rows="3" placeholder="Ex.: Olá, aqui é da obra…"></textarea>
+    </label>
+    <button type="submit" class="sr" tabindex="-1">Abrir</button>
+  </form>
+  <section class="card hide" id="recentes">
+    <h2>Recentes</h2>
+    <ul class="lista" id="lista"></ul>
+    <p class="info">Ficam só neste aparelho.</p>
+  </section>
+</main>
+<div class="acao"><div class="in">
+  <button type="button" id="copiar" disabled>Copiar link</button>
+  <a class="pri" id="abrir" href="#" target="_blank" rel="noopener" aria-disabled="true">Abrir conversa</a>
+</div></div>
+<div id="status" role="status" aria-live="polite"></div>
+
+<script src="../comum/base.js"></script>
+<script>
+'use strict';
+const CHAVE = 'whats-recentes';
+
+// texto digitado → número internacional só com dígitos (ex.: 5511999999999), ou {erro}
+function numero(txt) {
+  const s = String(txt || '').trim();
+  let d = s.replace(/\D/g, '');
+  if (!d) return { erro: '' };
+  const intl = s.startsWith('+') || d.startsWith('00');
+  if (intl) d = d.replace(/^00/, '');
+  else {
+    d = d.replace(/^0+/, ''); // 0 de ligação interurbana (011…)
+    if (d.length === 8 || d.length === 9) return { erro: 'Falta o DDD.' };
+    if (d.length === 10 || d.length === 11) d = '55' + d;
+  }
+  if (d.length < 10 || d.length > 15) return { erro: 'Número incompleto ou grande demais.' };
+  if (d.startsWith('55') && (d.length < 12 || d.length > 13)) return { erro: 'Número do Brasil deve ter DDD + 8 ou 9 dígitos.' };
+  return { d };
+}
+
+// 5511999999999 → +55 (11) 99999-9999
+function formatar(d) {
+  if (!d.startsWith('55')) return '+' + d;
+  const ddd = d.slice(2, 4), n = d.slice(4);
+  return `+55 (${ddd}) ${n.slice(0, n.length - 4)}-${n.slice(-4)}`;
+}
+
+const link = (d, msg) => `https://wa.me/${d}` + (msg.trim() ? '?text=' + encodeURIComponent(msg.trim()) : '');
+
+function lerRecentes() {
+  try { return JSON.parse(localStorage.getItem(CHAVE)) || []; } catch (e) { return []; }
+}
+function gravarRecentes(l) {
+  try { localStorage.setItem(CHAVE, JSON.stringify(l.slice(0, 3))); } catch (e) { /* sem armazenamento: só não lembra */ }
+  desenharRecentes();
+}
+
+function atualizar() {
+  const r = numero(F.$('#num').value);
+  const ok = !!r.d;
+  const prev = F.$('#previa');
+  prev.classList.toggle('err', !ok && !!r.erro);
+  prev.textContent = ok ? 'Vai abrir: ' + formatar(r.d) : r.erro || 'Número de outro país: comece com + e o código do país.';
+  const a = F.$('#abrir');
+  a.href = ok ? link(r.d, F.$('#msg').value) : '#';
+  a.setAttribute('aria-disabled', String(!ok));
+  F.$('#copiar').disabled = !ok;
+  return r.d;
+}
+
+function desenharRecentes() {
+  const l = lerRecentes();
+  F.$('#recentes').classList.toggle('hide', !l.length);
+  F.$('#lista').replaceChildren(...l.map((d) => {
+    const li = document.createElement('li');
+    li.className = 'item';
+    li.innerHTML = `<span class="nm"><b></b></span>
+      <a class="mini pri" href="#" target="_blank" rel="noopener" data-abrir>Abrir</a>
+      <button class="mini" type="button" data-x aria-label="Tirar dos recentes">✕</button>`;
+    li.querySelector('b').textContent = formatar(d);
+    const a = li.querySelector('[data-abrir]');
+    a.href = link(d, F.$('#msg').value);
+    a.setAttribute('aria-label', 'Abrir conversa com ' + formatar(d));
+    // abre a conversa na hora (com a mensagem escrita, se houver) e sobe o número para o topo
+    a.onclick = () => {
+      a.href = link(d, F.$('#msg').value);
+      F.$('#num').value = formatar(d);
+      atualizar();
+      setTimeout(() => gravarRecentes([d, ...lerRecentes().filter((x) => x !== d)]));
+    };
+    li.querySelector('[data-x]').onclick = () => gravarRecentes(lerRecentes().filter((x) => x !== d));
+    return li;
+  }));
+}
+
+F.$('#num').addEventListener('input', atualizar);
+F.$('#msg').addEventListener('input', atualizar);
+F.$('#abrir').addEventListener('click', (e) => {
+  const d = atualizar();
+  if (!d) { e.preventDefault(); return; }
+  gravarRecentes([d, ...lerRecentes().filter((x) => x !== d)]);
+});
+// Enter no campo do número abre a conversa
+F.$('#form').addEventListener('submit', (e) => { e.preventDefault(); if (atualizar()) F.$('#abrir').click(); });
+
+F.$('#copiar').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(F.$('#abrir').href); F.toast('Link copiado.'); }
+  catch (e) { F.toast('Não consegui copiar. Toque e segure no botão Abrir para copiar o link.', true); }
+});
+
+// "Colar" só aparece onde o navegador deixa ler a área de transferência
+if (navigator.clipboard && navigator.clipboard.readText) {
+  F.$('#colar').classList.remove('hide');
+  F.$('#colar').addEventListener('click', async () => {
+    try { F.$('#num').value = (await navigator.clipboard.readText()).trim(); atualizar(); }
+    catch (e) { F.toast('Não deu para colar daqui. Toque e segure no campo e escolha Colar.', true); }
+  });
+}
+
+atualizar();
+desenharRecentes();
+</script>
+</body>
+</html>

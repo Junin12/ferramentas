@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Comprimir PDF</title>
+<meta name="description" content="Reduza o tamanho de um PDF para mandar por WhatsApp ou e-mail, direto no aparelho.">
+<meta name="theme-color" content="#d93025">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icon-192.png">
+<link rel="stylesheet" href="../comum/base.css">
+</head>
+<body>
+<header class="topo"><div class="in"><a class="voltar" href="../?g=pdf">‹ PDF</a><h1>Comprimir PDF</h1></div></header>
+<main class="wrap">
+  <p class="sub">Reduz o tamanho para mandar por WhatsApp ou e-mail. Nada é enviado a servidor.</p>
+  <div class="drop" id="drop">
+    <p id="drop-txt">Arraste um PDF para cá ou</p>
+    <label class="btn pri" for="arq">Escolher PDF</label>
+    <input class="sr" id="arq" type="file" accept="application/pdf,.pdf">
+  </div>
+  <section class="card hide" id="opcoes">
+    <h2 id="arq-nome"></h2>
+    <div class="opcoes" role="radiogroup" aria-label="Quanto comprimir">
+      <label><input type="radio" name="nivel" value="96|0.5"><span>Forte<small>Arquivo bem menor; dá para ler na tela do celular</small></span></label>
+      <label><input type="radio" name="nivel" value="120|0.62" checked><span>Média<small>Bom equilíbrio para mandar por WhatsApp</small></span></label>
+      <label><input type="radio" name="nivel" value="150|0.75"><span>Leve<small>Quase sem perda; serve para imprimir</small></span></label>
+    </div>
+    <p class="info">Cada página vira uma imagem: o texto do PDF comprimido deixa de ser selecionável e pesquisável. O arquivo original não muda.</p>
+    <p class="res" id="resultado" role="status"></p>
+  </section>
+</main>
+<div class="acao"><div class="in"><button class="pri" id="comprimir" type="button" disabled>Comprimir</button></div></div>
+<div id="status" role="status" aria-live="polite"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" crossorigin="anonymous"></script>
+<script src="../comum/base.js"></script>
+<script>
+'use strict';
+let arq = null; // {nome, bytes, tam}
+
+F.entrada(F.$('#drop'), F.$('#arq'), async ([f]) => {
+  if (!F.libs('pdfjsLib', 'PDFLib')) return;
+  try {
+    arq = { nome: f.name, bytes: await F.bytesPdf(f), tam: f.size };
+    F.$('#arq-nome').textContent = `${f.name} · ${F.tamanho(f.size)}`;
+    F.$('#drop-txt').textContent = 'Trocar de arquivo:';
+    F.$('#resultado').textContent = '';
+    F.$('#opcoes').classList.remove('hide');
+    F.$('#comprimir').disabled = false;
+  } catch (e) { F.toast(e.message, true); }
+});
+
+F.$('#comprimir').addEventListener('click', (e) => F.trabalhando(e.currentTarget, async (msg) => {
+  const [dpi, q] = document.querySelector('[name=nivel]:checked').value.split('|').map(Number);
+  let pdf;
+  try { pdf = await pdfjsLib.getDocument({ isEvalSupported: false, data: arq.bytes.slice() }).promise; }
+  catch (err) { throw new Error(err.name === 'PasswordException' ? 'PDF protegido por senha.' : 'Não consegui abrir este PDF.'); }
+  const out = await PDFLib.PDFDocument.create();
+  for (let i = 1; i <= pdf.numPages; i++) {
+    msg(`Página ${i} de ${pdf.numPages}…`);
+    const page = await pdf.getPage(i);
+    const c = await F.canvasDaPagina(page, dpi, 2600);
+    const jpg = await out.embedJpg(new Uint8Array(await (await F.jpeg(c, q)).arrayBuffer()));
+    c.width = 0; // libera a memória do canvas
+    const vp = page.getViewport({ scale: 1 }); // mesmo tamanho da página original, já na posição em que aparece
+    out.addPage([vp.width, vp.height]).drawImage(jpg, { x: 0, y: 0, width: vp.width, height: vp.height });
+    page.cleanup();
+  }
+  const bytes = await out.save();
+  pdf.destroy();
+  const red = 1 - bytes.length / arq.tam;
+  if (red < 0.05) {
+    F.$('#resultado').textContent = '';
+    throw new Error(`Comprimir não reduziu este PDF (${F.tamanho(arq.tam)} → ${F.tamanho(bytes.length)}): use o original` +
+      (dpi > 96 ? ' ou tente o nível Forte.' : '.'));
+  }
+  F.baixar(new Blob([bytes], { type: 'application/pdf' }), F.nomeBase(arq.nome) + '-comprimido.pdf');
+  F.$('#resultado').textContent = `${F.tamanho(arq.tam)} → ${F.tamanho(bytes.length)} (${Math.round(red * 100)}% menor)`;
+}));
+</script>
+</body>
+</html>

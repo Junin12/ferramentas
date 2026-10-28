@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ferramentas WiApps</title>
+<meta name="description" content="Ferramentas que rodam no seu aparelho: editar PDF, converter para Word e mais. Nenhum arquivo é enviado a servidor.">
+<meta name="theme-color" content="#1F3A5F">
+<link rel="canonical" href="https://wiapps.com.br/ferramentas/">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png">
+<style>
+:root{--bg:#eef0f3;--panel:#fff;--ink:#1d2330;--muted:#5b6475;--line:#d9dde4;--brand:#1F3A5F;--focus:#1a73e8}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#14171c;--panel:#1f242c;--ink:#e8eaee;--muted:#a0a8b6;--line:#343b47;--brand:#8ab4f8;--focus:#8ab4f8}
+}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+.wrap{max-width:760px;margin:0 auto;padding:20px 16px 40px}
+h1{margin:4px 0 4px;font-size:24px}
+h1 b{color:var(--brand)}
+.sub{color:var(--muted);margin:0 0 20px}
+.grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
+.ferr{display:flex;gap:12px;align-items:flex-start;padding:14px;background:var(--panel);border:1px solid var(--line);border-radius:14px;color:inherit;text-decoration:none;min-height:84px}
+.ferr:hover{border-color:var(--brand)}
+.ferr .ic{flex:none;width:44px;height:44px;border-radius:12px;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,var(--c1),var(--c2))}
+.ferr .ic svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ferr b{display:block;margin-bottom:2px}
+.ferr small{color:var(--muted)}
+:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.rodape{color:var(--muted);font-size:13px;margin-top:28px}
+.voltar{display:inline-flex;align-items:center;min-height:38px;color:var(--muted);text-decoration:none}
+.voltar:hover{color:var(--ink)}
+[hidden]{display:none!important}
+.embutido .rodape{display:none}
+</style>
+</head>
+<body>
+<main class="wrap">
+  <a class="voltar" id="voltar" href="./" hidden>‹ Ferramentas</a>
+  <h1 id="titulo">Ferramentas <b>WiApps</b></h1>
+  <p class="sub">Tudo roda no seu aparelho: os arquivos não são enviados a nenhum servidor.</p>
+  <div class="grade" id="grade"></div>
+  <p class="rodape">Para instalar: no Chrome do celular, menu › “Instalar app”.</p>
+</main>
+<script>
+'use strict';
+// Cada grupo vira um botão na tela inicial; as ferramentas dele abrem em ./?g=<id>.
+const GRUPOS = [
+  { id: 'pdf', nome: 'PDF e documentos', desc: 'Editar, assinar, escanear, juntar, dividir, comprimir e converter', c: ['#E2544A', '#B3261E'],
+    ico: '<path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/><path d="M9 13h6M9 16.5h4"/>' },
+  { id: 'dwg', nome: 'Plantas: DWG e PDF', desc: 'Ver plantas DWG, medir em cima do DWG ou do PDF e exportar', c: ['#3D8BD9', '#1F5C99'],
+    ico: '<path d="M3 21h18M5 21V9l7-5 7 5v12"/><path d="M9 21v-6h6v6"/>' },
+  { id: 'obra', nome: 'Obra: cálculos e preços', desc: 'Calculadora de obra (cubicagem, tijolos, concreto, aço…) e consulta à SINAPI', c: ['#D98A3D', '#9C5A1C'],
+    ico: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h2M12 11h2M16 11h0M8 15h2M12 15h2M8 18.5h2M12 18.5h2"/><path d="M16 14.5v4.5"/>' },
+  { id: 'normas', nome: 'Normas em cards', desc: 'NBR 6118, concreto, ensaios, saneamento, NRs de segurança, desempenho e acessibilidade em desenhos', c: ['#4E7A7E', '#2F5D62'],
+    ico: '<path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5V5.5M8 7.5h8M8 11h8M8 14.5h5"/>' },
+  { id: 'mapa', nome: 'Mapa e coordenadas', desc: 'Medir área com o GPS e converter UTM, latitude e longitude', c: ['#43A867', '#2E7D4F'],
+    ico: '<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M8 9l7 1 1 5-6 1z"/>' },
+  { id: 'foto', nome: 'Fotos', desc: 'Comprimir em lote, HEIC para JPG e antes e depois', c: ['#E25C8A', '#A8305C'],
+    ico: '<path d="M3 8.5A1.5 1.5 0 0 1 4.5 7h2.8l1.6-2.2h6.2L16.7 7h2.8A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z"/><circle cx="12" cy="13" r="3.6"/>' },
+  { id: 'util', nome: 'Utilidades', desc: 'QR code, prazos, planilhas, nível de bolha e WhatsApp', c: ['#18B5A6', '#0B7C74'],
+    ico: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 17.5h7M17.5 14v7"/>' },
+];
+
+// Para adicionar uma ferramenta: crie a pasta dela aqui dentro e acrescente uma linha nesta lista (com o grupo).
+const FERRAMENTAS = [
+  { grupo: 'pdf', pasta: 'pdf/', nome: 'Editor PDF', desc: 'Escrever, assinar, preencher formulário, organizar páginas e converter para Word', c: ['#E2544A', '#B3261E'],
+    ico: '<path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/><path d="M9 17l1.5-4 3.5 3.5L9 17z"/><path d="M14 16.5l2-2"/>' },
+  { grupo: 'pdf', pasta: 'juntar/', nome: 'Juntar PDFs', desc: 'Vários arquivos num só, na ordem que você escolher', c: ['#4F7CE8', '#2747B0'],
+    ico: '<rect x="3" y="3" width="10" height="13" rx="1"/><rect x="11" y="8" width="10" height="13" rx="1"/><path d="M14 14.5h4M16 12.5v4"/>' },
+  { grupo: 'pdf', pasta: 'dividir/', nome: 'Dividir PDF', desc: 'Separar páginas ou intervalos', c: ['#F28C28', '#C2570C'],
+    ico: '<path d="M6 3h12v7H6zM6 14h12v7H6z"/><path d="M3 12h3M9 12h2M13 12h2M18 12h3"/>' },
+  { grupo: 'pdf', pasta: 'imagem-para-pdf/', nome: 'Imagem para PDF', desc: 'Fotos de RDO, notas e romaneios viram um PDF', c: ['#36B37E', '#1D7A48'],
+    ico: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/>' },
+  { grupo: 'pdf', pasta: 'comprimir/', nome: 'Comprimir PDF', desc: 'Arquivo menor para WhatsApp e e-mail', c: ['#8A6BE0', '#5A3FB0'],
+    ico: '<path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/><path d="M12 9v4M10 11l2 2 2-2M12 19v-4M10 17l2-2 2 2"/>' },
+  { grupo: 'pdf', pasta: 'pdf-para-imagem/', nome: 'PDF para imagem', desc: 'Páginas exportadas como JPG', c: ['#18B5A6', '#0B7C74'],
+    ico: '<path d="M10 3H5v18h7"/><rect x="12" y="9" width="9" height="12" rx="1.5"/><circle cx="15.5" cy="13" r="1.2"/><path d="M21 19l-3-3-4 4"/>' },
+  { grupo: 'dwg', pasta: 'dwg/', nome: 'Ver e medir DWG', desc: 'Abrir planta e folhas de impressão, ligar camadas, medir distância e área', c: ['#3D8BD9', '#1F5C99'],
+    ico: '<path d="M3 17L17 3l4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/>' },
+  { grupo: 'dwg', pasta: 'dwg/?exportar=pdf', nome: 'DWG para PDF', desc: 'Folha de impressão ou área do desenho, com papel e escala', c: ['#E2544A', '#B3261E'],
+    ico: '<path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/><path d="M8 17l3-4 2 2 3-4"/>' },
+  { grupo: 'dwg', pasta: 'dwg/?exportar=png', nome: 'DWG para imagem', desc: 'PNG ou JPG para RDO e mensagens', c: ['#36B37E', '#1D7A48'],
+    ico: '<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="8.5" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/>' },
+  { grupo: 'dwg', pasta: 'dwg/?exportar=xlsx', nome: 'Quantitativos para Excel', desc: 'Blocos, atributos, comprimentos e áreas por camada', c: ['#21A366', '#107C41'],
+    ico: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M3 14h18M9 4v16M15 4v16"/>' },
+  { grupo: 'dwg', pasta: 'dwg/?exportar=docx', nome: 'Relatório em Word', desc: 'Imagem do desenho e tabelas de quantitativos', c: ['#4F7CE8', '#2747B0'],
+    ico: '<path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/><path d="M8 11h8M8 14.5h8M8 18h5"/>' },
+  { grupo: 'dwg', pasta: 'dwg/?exportar=dxf', nome: 'DWG para DXF', desc: 'Para LibreCAD, QCAD e AutoCAD antigo', c: ['#8A6BE0', '#5A3FB0'],
+    ico: '<path d="M4 7h11l-3-3M20 17H9l3 3"/>' },
+  { grupo: 'dwg', pasta: 'dwg/?exportar=kml', nome: 'DWG para Google Earth', desc: 'Coordenadas UTM em KML ou CSV com latitude e longitude', c: ['#F28C28', '#C2570C'],
+    ico: '<path d="M12 21s-6-5.6-6-11a6 6 0 1 1 12 0c0 5.4-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/>' },
+  { grupo: 'obra', pasta: 'obra/', nome: 'Calculadora de obra', desc: 'Cubicagem de caminhão, tijolos, concreto, aço, vala, argamassa, piso, pintura e mais', c: ['#D98A3D', '#9C5A1C'],
+    ico: '<rect x="5" y="3" width="14" height="18" rx="2"/><path d="M8 7h8M8 11h2M12 11h2M16 11h0M8 15h2M12 15h2M8 18.5h2M12 18.5h2"/><path d="M16 14.5v4.5"/>' },
+  { grupo: 'normas', pasta: 'normas/', nome: 'Buscar em todas as normas', desc: 'Uma palavra e aparecem os cards de todas as normas; seus favoritos ficam aqui', c: ['#4E7A7E', '#2F5D62'],
+    ico: '<circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5.5 5.5"/><path d="M8 9h5M8 12h3.5"/>' },
+  { grupo: 'normas', pasta: 'nbr6118/', nome: 'NBR 6118 · Estruturas de concreto', desc: 'Cobrimento, concreto, flechas, fissuras, pilares, estribos e ancoragem', c: ['#6B7F7A', '#2F5D62'],
+    ico: '<rect x="4" y="4" width="16" height="16" rx="1.5"/><rect x="7.5" y="7.5" width="9" height="9" rx="1"/><circle cx="9" cy="9" r=".9"/><circle cx="15" cy="9" r=".9"/><circle cx="9" cy="15" r=".9"/><circle cx="15" cy="15" r=".9"/>' },
+  { grupo: 'normas', pasta: 'nbr12655/', nome: 'NBR 12655 · Controle do concreto', desc: 'Dosagem, slump, lotes, exemplares, fck estimado e aceitação', c: ['#6B7F7A', '#2F5D62'],
+    ico: '<rect x="4" y="4" width="16" height="16" rx="1.5"/><rect x="7.5" y="7.5" width="9" height="9" rx="1"/><circle cx="9" cy="9" r=".9"/><circle cx="15" cy="9" r=".9"/><circle cx="9" cy="15" r=".9"/><circle cx="15" cy="15" r=".9"/>' },
+  { grupo: 'normas', pasta: 'nbr14931/', nome: 'NBR 14931 · Execução de concreto', desc: 'Lançamento, vibração, juntas, cura e desforma', c: ['#6B7F7A', '#2F5D62'],
+    ico: '<rect x="4" y="4" width="16" height="16" rx="1.5"/><rect x="7.5" y="7.5" width="9" height="9" rx="1"/><circle cx="9" cy="9" r=".9"/><circle cx="15" cy="9" r=".9"/><circle cx="9" cy="15" r=".9"/><circle cx="15" cy="15" r=".9"/>' },
+  { grupo: 'normas', pasta: 'nbr15696/', nome: 'NBR 15696 · Fôrmas e escoramentos', desc: 'Escoras, carga do concreto fresco, contraflecha, reescoramento e retirada', c: ['#6B7F7A', '#2F5D62'],
+    ico: '<rect x="4" y="4" width="16" height="16" rx="1.5"/><rect x="7.5" y="7.5" width="9" height="9" rx="1"/><circle cx="9" cy="9" r=".9"/><circle cx="15" cy="9" r=".9"/><circle cx="9" cy="15" r=".9"/><circle cx="15" cy="15" r=".9"/>' },
+  { grupo: 'normas', pasta: 'nbr6120/', nome: 'NBR 6120 · Cargas', desc: 'Pesos específicos, sobrecargas de uso, laje, paredes e caixa d\'água', c: ['#6B7F7A', '#2F5D62'],
+    ico: '<rect x="4" y="4" width="16" height="16" rx="1.5"/><rect x="7.5" y="7.5" width="9" height="9" rx="1"/><circle cx="9" cy="9" r=".9"/><circle cx="15" cy="9" r=".9"/><circle cx="9" cy="15" r=".9"/><circle cx="15" cy="15" r=".9"/>' },
+  { grupo: 'normas', pasta: 'nbr6122/', nome: 'NBR 6122 · Fundações', desc: 'Rasa ou profunda, sapata, fator de segurança, prova de carga e tubulão', c: ['#6B7F7A', '#2F5D62'],
+    ico: '<rect x="4" y="4" width="16" height="16" rx="1.5"/><rect x="7.5" y="7.5" width="9" height="9" rx="1"/><circle cx="9" cy="9" r=".9"/><circle cx="15" cy="9" r=".9"/><circle cx="9" cy="15" r=".9"/><circle cx="15" cy="15" r=".9"/>' },
+  { grupo: 'normas', pasta: 'nbr16868/', nome: 'NBR 16868 · Alvenaria estrutural', desc: 'Espessura, juntas, amarração, graute, bloco e prisma', c: ['#6B7F7A', '#2F5D62'],
+    ico: '<rect x="4" y="4" width="16" height="16" rx="1.5"/><rect x="7.5" y="7.5" width="9" height="9" rx="1"/><circle cx="9" cy="9" r=".9"/><circle cx="15" cy="9" r=".9"/><circle cx="9" cy="15" r=".9"/><circle cx="15" cy="15" r=".9"/>' },
+  { grupo: 'normas', pasta: 'nbr7480/', nome: 'NBR 7480 · Aço para armaduras', desc: 'Bitolas, kg/m, CA-25, CA-50, CA-60, dobramento e recebimento', c: ['#6B7F7A', '#2F5D62'],
+    ico: '<rect x="4" y="4" width="16" height="16" rx="1.5"/><rect x="7.5" y="7.5" width="9" height="9" rx="1"/><circle cx="9" cy="9" r=".9"/><circle cx="15" cy="9" r=".9"/><circle cx="9" cy="15" r=".9"/><circle cx="15" cy="15" r=".9"/>' },
+  { grupo: 'normas', pasta: 'nbr5738/', nome: 'NBR 5738 e 5739 · Corpos de prova', desc: 'Moldagem, golpes, cura, idades e tipos de ruptura', c: ['#8A6BE0', '#5A3FB0'],
+    ico: '<rect x="8" y="5" width="8" height="15" rx="1"/><ellipse cx="12" cy="5" rx="4" ry="1.4"/><path d="M8 12h8"/>' },
+  { grupo: 'normas', pasta: 'nbr16889/', nome: 'NBR 16889 · Slump', desc: 'Cone, 3 camadas de 25 golpes, retirada e leitura', c: ['#8A6BE0', '#5A3FB0'],
+    ico: '<rect x="8" y="5" width="8" height="15" rx="1"/><ellipse cx="12" cy="5" rx="4" ry="1.4"/><path d="M8 12h8"/>' },
+  { grupo: 'normas', pasta: 'nbr7211/', nome: 'NBR 7211 · Agregados', desc: 'Areia e brita, módulo de finura, graduações e finos', c: ['#8A6BE0', '#5A3FB0'],
+    ico: '<rect x="8" y="5" width="8" height="15" rx="1"/><ellipse cx="12" cy="5" rx="4" ry="1.4"/><path d="M8 12h8"/>' },
+  { grupo: 'normas', pasta: 'nbr7182/', nome: 'NBR 7182 e 9895 · Compactação e CBR', desc: 'Curva de Proctor, energias, grau de compactação e CBR', c: ['#8A6BE0', '#5A3FB0'],
+    ico: '<rect x="8" y="5" width="8" height="15" rx="1"/><ellipse cx="12" cy="5" rx="4" ry="1.4"/><path d="M8 12h8"/>' },
+  { grupo: 'normas', pasta: 'nbr6484/', nome: 'NBR 6484 e 8036 · Sondagem SPT', desc: 'Martelo, NSPT, compacidade, nível d\'água e número de furos', c: ['#8A6BE0', '#5A3FB0'],
+    ico: '<rect x="8" y="5" width="8" height="15" rx="1"/><ellipse cx="12" cy="5" rx="4" ry="1.4"/><path d="M8 12h8"/>' },
+  { grupo: 'normas', pasta: 'nbr12266/', nome: 'NBR 12266 · Valas', desc: 'Escoramento, bota-fora, berço, reaterro e água na vala', c: ['#3D8BD9', '#1F5C99'],
+    ico: '<circle cx="12" cy="12" r="7.5"/><path d="M5.5 15.5h13"/>' },
+  { grupo: 'normas', pasta: 'nbr9649/', nome: 'NBR 9649 · Redes de esgoto', desc: 'Vazão, tensão trativa, declividade, lâmina, recobrimento e PV', c: ['#3D8BD9', '#1F5C99'],
+    ico: '<circle cx="12" cy="12" r="7.5"/><path d="M5.5 15.5h13"/>' },
+  { grupo: 'normas', pasta: 'nbr12218/', nome: 'NBR 12218 · Rede de água', desc: 'Pressões, zonas, diâmetro, velocidade, descarga e ventosa', c: ['#3D8BD9', '#1F5C99'],
+    ico: '<circle cx="12" cy="12" r="7.5"/><path d="M5.5 15.5h13"/>' },
+  { grupo: 'normas', pasta: 'nr18/', nome: 'NR-18 · Construção', desc: 'PGR, guarda-corpo, aberturas, vala, escada, andaime e vivência', c: ['#F2AE3D', '#B26A00'],
+    ico: '<path d="M4 16a8 8 0 0 1 16 0z"/><path d="M3 16h18v2.5H3zM12 8v3.5"/>' },
+  { grupo: 'normas', pasta: 'nr35/', nome: 'NR-35 · Trabalho em altura', desc: 'Treinamento, PT, cinto, talabarte, zona livre de queda e resgate', c: ['#F2AE3D', '#B26A00'],
+    ico: '<path d="M4 16a8 8 0 0 1 16 0z"/><path d="M3 16h18v2.5H3zM12 8v3.5"/>' },
+  { grupo: 'normas', pasta: 'nr33/', nome: 'NR-33 · Espaço confinado', desc: 'Gases, vigia, supervisor, PET, ventilação e resgate', c: ['#F2AE3D', '#B26A00'],
+    ico: '<path d="M4 16a8 8 0 0 1 16 0z"/><path d="M3 16h18v2.5H3zM12 8v3.5"/>' },
+  { grupo: 'normas', pasta: 'nr6/', nome: 'NR-6 · EPI', desc: 'EPI por parte do corpo, CA, obrigações e ficha de entrega', c: ['#F2AE3D', '#B26A00'],
+    ico: '<path d="M4 16a8 8 0 0 1 16 0z"/><path d="M3 16h18v2.5H3zM12 8v3.5"/>' },
+  { grupo: 'normas', pasta: 'nbr15575/', nome: 'NBR 15575 · Desempenho', desc: 'Vida útil de projeto, níveis, pé-direito, ruído e manutenção', c: ['#43A867', '#2E7D4F'],
+    ico: '<path d="M3 11l9-7 9 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5h4v5"/>' },
+  { grupo: 'normas', pasta: 'nbr9050/', nome: 'NBR 9050 · Acessibilidade', desc: 'Giro da cadeira, rampa, corrimão, porta, sanitário e piso tátil', c: ['#43A867', '#2E7D4F'],
+    ico: '<path d="M3 11l9-7 9 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5h4v5"/>' },
+  { grupo: 'dwg', pasta: 'medir-pdf/', nome: 'Medir na prancha (PDF)', desc: 'Calibre a escala e meça comprimento, área e contagem em cima do PDF', c: ['#1F5C99', '#173F6B'],
+    ico: '<path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/><path d="M8 17l8-6"/><circle cx="8" cy="17" r="1.3"/><circle cx="16" cy="11" r="1.3"/>' },
+  { grupo: 'obra', pasta: 'sinapi/', nome: 'Consulta SINAPI', desc: 'Pesquise composições e insumos e monte um orçamento rápido', c: ['#F2AE3D', '#9C5A1C'],
+    ico: '<circle cx="10.5" cy="10.5" r="6"/><path d="M15 15l5.5 5.5"/><path d="M10.5 7.5v6M8.5 9h3a1 1 0 0 1 0 2h-2a1 1 0 0 0 0 2h3"/>' },
+  { grupo: 'mapa', pasta: 'coordenadas/', nome: 'Conversor de coordenadas', desc: 'UTM ↔ latitude e longitude, SAD 69 e Córrego Alegre para SIRGAS 2000', c: ['#43A867', '#2E7D4F'],
+    ico: '<circle cx="12" cy="12" r="8"/><path d="M4 12h16M12 4c2.5 2.5 2.5 13.5 0 16M12 4c-2.5 2.5-2.5 13.5 0 16"/>' },
+  { grupo: 'mapa', pasta: 'area/', nome: 'Medir área no mapa', desc: 'Marque os vértices ou grave a trilha com o GPS; exporte PDF, KML e DXF', c: ['#43A867', '#2E7D4F'],
+    ico: '<path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M8 9l7 1 1 5-6 1z"/>' },
+  { grupo: 'pdf', pasta: 'escanear/', nome: 'Escanear documento', desc: 'Foto do papel recortada, endireitada e sem sombra, em PDF', c: ['#D98A3D', '#9C5A1C'],
+    ico: '<path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"/><path d="M7 12h10"/>' },
+  { grupo: 'pdf', pasta: 'assinar/', nome: 'Assinar vários PDFs', desc: 'A mesma assinatura e carimbo em todos de uma vez', c: ['#3D8BD9', '#1F5C99'],
+    ico: '<path d="M14 3H6v18h12V7z"/><path d="M14 3v4h4"/><path d="M8 17c1.5-2 2.5-2 3 0s1.5 1 2.5-1 1.5-1 2.5 1"/>' },
+  { grupo: 'foto', pasta: 'fotos/', nome: 'Comprimir fotos', desc: 'Várias de uma vez: de 5 MB para 300 KB, para WhatsApp e relatório', c: ['#E25C8A', '#A8305C'],
+    ico: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M9 12h6M12 9l3 3-3 3"/>' },
+  { grupo: 'foto', pasta: 'fotos/?modo=heic', nome: 'HEIC para JPG', desc: 'Fotos do iPhone que o computador não abre viram JPG', c: ['#8A6BE0', '#5A3FB0'],
+    ico: '<rect x="6" y="2.5" width="12" height="19" rx="2.5"/><path d="M10 18.5h4M9 9h6M9 12.5h4"/>' },
+  { grupo: 'foto', pasta: 'antes-depois/', nome: 'Antes e depois', desc: 'Duas fotos lado a lado, com etiquetas, título e data', c: ['#F28C28', '#C2570C'],
+    ico: '<rect x="3" y="5" width="8" height="14" rx="1.5"/><rect x="13" y="5" width="8" height="14" rx="1.5"/><path d="M5.5 15l2-3 2 3M15.5 15l2-3 2 3"/>' },
+  { grupo: 'util', pasta: 'gerar-qr/', nome: 'Gerar QR code', desc: 'Link, texto, Wi-Fi do canteiro, WhatsApp, localização ou contato', c: ['#5A3FB0', '#3B2A80'],
+    ico: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h2v2h-2zM18 14h3M14 18h3v3M20 17v4"/>' },
+  { grupo: 'util', pasta: 'prazos/', nome: 'Calculadora de prazos', desc: 'Dias úteis entre datas e vencimento de prazos, com feriados', c: ['#1F5FA8', '#173F6B'],
+    ico: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4M8 14h3M8 17.5h6"/>' },
+  { grupo: 'util', pasta: 'planilhas/', nome: 'Juntar e limpar planilhas', desc: 'CSV ou Excel: juntar, filtrar, tirar repetidas e ordenar', c: ['#21A366', '#107C41'],
+    ico: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M3 14h18M9 4v16"/>' },
+  { grupo: 'util', pasta: 'qr/', nome: 'Ler QR e código de barras', desc: 'QR code, chave da NF-e na DANFE e etiquetas', c: ['#8A6BE0', '#5A3FB0'],
+    ico: '<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3zM18 18h3v3h-3z"/>' },
+  { grupo: 'util', pasta: 'nivel/', nome: 'Nível e inclinômetro', desc: 'Bolha, graus e porcentagem com o sensor do celular', c: ['#18B5A6', '#0B7C74'],
+    ico: '<rect x="2" y="9" width="20" height="6" rx="3"/><circle cx="12" cy="12" r="1.8"/><path d="M9 9v6M15 9v6"/>' },
+  { grupo: 'util', pasta: 'whatsapp/', nome: 'Conversar no WhatsApp', desc: 'Digite o número e abra a conversa direto', c: ['#25B864', '#0B7A6C'],
+    ico: '<path d="M4 20l1.3-4A8 8 0 1 1 8.5 19z"/><path d="M9.5 9.5c.5 2.2 2.3 4 4.5 4.5l1-1.2 1.6.8"/>' },
+];
+
+// aberto de dentro de outro app (ex.: ?de=wigo): vale para a sessão toda, inclusive dentro das ferramentas
+const de = new URLSearchParams(location.search).get('de');
+try { if (de) sessionStorage.setItem('ferr-de', de); } catch (e) { /* sem armazenamento: segue normal */ }
+if (de || window !== window.top) document.documentElement.classList.add('embutido');
+// dentro de outro app (iframe): trocar de página sem empilhar no histórico, para o Voltar do celular fechar as ferramentas
+if (window !== window.top) document.addEventListener('click', (e) => {
+  const a = e.target.closest('a[href]');
+  if (a && a.origin === location.origin && !a.target && !a.hasAttribute('download')) { e.preventDefault(); location.replace(a.href); }
+});
+
+function cartao(href, f) {
+  const a = document.createElement('a');
+  a.className = 'ferr';
+  a.href = href;
+  a.style.setProperty('--c1', f.c[0]);
+  a.style.setProperty('--c2', f.c[1]);
+  a.innerHTML = `<span class="ic"><svg viewBox="0 0 24 24" aria-hidden="true">${f.ico}</svg></span><span><b></b><small></small></span>`;
+  a.querySelector('b').textContent = f.nome;
+  a.querySelector('small').textContent = f.desc;
+  return a;
+}
+
+const grupo = GRUPOS.find((g) => g.id === new URLSearchParams(location.search).get('g'));
+if (grupo) {
+  document.title = `${grupo.nome} · Ferramentas WiApps`;
+  document.getElementById('titulo').textContent = grupo.nome;
+  document.getElementById('voltar').hidden = false;
+  document.getElementById('grade').replaceChildren(...FERRAMENTAS.filter((f) => f.grupo === grupo.id).map((f) => cartao(f.pasta, f)));
+} else {
+  // grupo com uma ferramenta só abre direto nela
+  document.getElementById('grade').replaceChildren(...GRUPOS.map((g) => {
+    const fs = FERRAMENTAS.filter((f) => f.grupo === g.id);
+    return cartao(fs.length === 1 ? fs[0].pasta : `./?g=${g.id}`, g);
+  }));
+}
+
+if ('serviceWorker' in navigator && location.protocol === 'https:') {
+  navigator.serviceWorker.register('sw.js').catch((e) => console.warn('SW não registrado', e));
+}
+</script>
+</body>
+</html>

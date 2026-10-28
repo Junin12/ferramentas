@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Gerar QR code</title>
+<meta name="description" content="QR code de link, texto, Wi-Fi, WhatsApp, localização ou contato, em imagem ou PDF para imprimir.">
+<meta name="theme-color" content="#5A3FB0">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icon-192.png">
+<link rel="stylesheet" href="../comum/base.css">
+<style>
+:root{--brand:#5A3FB0}
+.modo{display:flex;gap:6px;flex-wrap:wrap}
+.modo button[aria-pressed="true"]{border-color:var(--brand);color:var(--brand);font-weight:700}
+.campo textarea{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%;min-height:70px}
+.previa{display:grid;justify-items:center;gap:6px;background:#fff;border-radius:14px;padding:16px}
+.previa canvas{max-width:min(100%,320px);height:auto;image-rendering:pixelated}
+.previa b{color:#111;font-size:18px;text-align:center}
+.grade2{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+</style>
+</head>
+<body>
+<header class="topo"><div class="in"><a class="voltar" href="../?g=util">‹ Utilidades</a><h1>Gerar QR code</h1></div></header>
+<main class="wrap">
+  <div class="modo" role="group" aria-label="Tipo de QR">
+    <button type="button" data-m="txt" aria-pressed="true">Link ou texto</button>
+    <button type="button" data-m="wifi" aria-pressed="false">Wi-Fi</button>
+    <button type="button" data-m="zap" aria-pressed="false">WhatsApp</button>
+    <button type="button" data-m="geo" aria-pressed="false">Localização</button>
+    <button type="button" data-m="vcard" aria-pressed="false">Contato</button>
+  </div>
+  <section class="card" id="campos"></section>
+  <section class="card">
+    <div class="grade2">
+      <label class="campo">Legenda embaixo (opcional)<input id="leg" type="text" maxlength="60" placeholder="Ex.: Wi-Fi do canteiro"></label>
+      <label class="campo">Correção de erros
+        <select id="nivel"><option value="M">Normal</option><option value="Q">Alta (placa ao tempo)</option><option value="H">Máxima</option><option value="L">Baixa (QR menor)</option></select>
+      </label>
+      <label class="campo">Cópias no PDF
+        <select id="copias"><option value="1">1 por folha (placa)</option><option value="6">6 por folha</option><option value="12">12 por folha (etiquetas)</option></select>
+      </label>
+    </div>
+  </section>
+  <div class="previa" id="previa" aria-live="polite"><canvas id="qr" width="10" height="10" aria-label="QR code gerado"></canvas><b id="leg-prev"></b></div>
+  <p class="info" id="info"></p>
+</main>
+<div class="acao"><div class="in">
+  <button type="button" id="svg" disabled>SVG</button>
+  <button type="button" id="pdf" disabled>PDF</button>
+  <button type="button" class="pri" id="png" disabled>Imagem</button>
+</div></div>
+<div id="status" role="status" aria-live="polite"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" crossorigin="anonymous"></script>
+<script src="../comum/base.js"></script>
+<script>
+'use strict';
+// A codificação do QR é da biblioteca qrcode-generator (MIT); aqui ficam os formatos de cada tipo, o desenho e a exportação.
+let modo = 'txt', qr = null;
+const CAMPOS = {
+  txt: [['t', 'Link ou texto', 'area', 'https://… ou qualquer texto']],
+  wifi: [['ssid', 'Nome da rede (SSID)'], ['senha', 'Senha'], ['seg', 'Segurança', 'sel', [['WPA', 'WPA/WPA2/WPA3'], ['WEP', 'WEP'], ['nopass', 'Sem senha']]], ['oculta', 'Rede oculta', 'sel', [['', 'Não'], ['true', 'Sim']]]],
+  zap: [['num', 'Número com DDD', 'tel', '(34) 99999-9999'], ['msg', 'Mensagem pronta (opcional)', 'area']],
+  geo: [['lat', 'Latitude', 'dec', '-19,750000'], ['lon', 'Longitude', 'dec', '-47,930000'], ['gps', '📍 Usar a posição deste celular', 'botao']],
+  vcard: [['nome', 'Nome'], ['emp', 'Empresa'], ['cargo', 'Cargo'], ['tel', 'Telefone', 'tel'], ['email', 'E-mail', 'email']],
+};
+const val = (k) => F.$(`[data-k="${k}"]`)?.value.trim() || '';
+// escapa \ ; , : " no formato WIFI:
+const esc = (s) => s.replace(/([\\;,:"])/g, '\\$1');
+const num = (s) => parseFloat(String(s).replace(',', '.'));
+function conteudo() {
+  if (modo === 'txt') return val('t');
+  if (modo === 'wifi') { if (!val('ssid')) return ''; const seg = val('seg') || 'WPA'; return `WIFI:T:${seg};S:${esc(val('ssid'))};${seg !== 'nopass' ? `P:${esc(val('senha'))};` : ''}${val('oculta') ? 'H:true;' : ''};`; }
+  if (modo === 'zap') { let d = val('num').replace(/\D/g, '').replace(/^0+/, ''); if (d.length < 10) return ''; if (d.length <= 11) d = '55' + d; return `https://wa.me/${d}${val('msg') ? '?text=' + encodeURIComponent(val('msg')) : ''}`; }
+  if (modo === 'geo') { const la = num(val('lat')), lo = num(val('lon')); if (!(Math.abs(la) <= 90 && Math.abs(lo) <= 180)) return ''; return `geo:${la.toFixed(6)},${lo.toFixed(6)}`; }
+  if (modo === 'vcard') { if (!val('nome')) return ''; const l = ['BEGIN:VCARD', 'VERSION:3.0', `FN:${val('nome')}`, `N:${val('nome')};;;;`];
+    if (val('emp')) l.push(`ORG:${val('emp')}`); if (val('cargo')) l.push(`TITLE:${val('cargo')}`); if (val('tel')) l.push(`TEL;TYPE=CELL:${val('tel')}`); if (val('email')) l.push(`EMAIL:${val('email')}`); l.push('END:VCARD'); return l.join('\n'); }
+  return '';
+}
+function montarCampos() {
+  F.$('#campos').replaceChildren(...CAMPOS[modo].map(([k, rot, tipo, extra]) => {
+    if (tipo === 'botao') { const b = document.createElement('button'); b.type = 'button'; b.textContent = rot; b.onclick = usarGps; return b; }
+    const l = document.createElement('label'); l.className = 'campo'; l.textContent = rot;
+    let i;
+    if (tipo === 'area') i = document.createElement('textarea');
+    else if (tipo === 'sel') { i = document.createElement('select'); for (const [v, t] of extra) { const o = document.createElement('option'); o.value = v; o.textContent = t; i.append(o); } }
+    else { i = document.createElement('input'); i.type = tipo === 'tel' ? 'tel' : tipo === 'email' ? 'email' : 'text'; if (tipo === 'dec') i.inputMode = 'decimal'; i.autocomplete = 'off'; }
+    if (typeof extra === 'string') i.placeholder = extra;
+    i.dataset.k = k; i.addEventListener('input', gerar); i.addEventListener('change', gerar); l.append(i); return l;
+  }));
+  gerar();
+}
+function usarGps() {
+  if (!navigator.geolocation) return F.toast('Este aparelho não informa a localização.', true);
+  F.toast('Lendo o GPS…');
+  navigator.geolocation.getCurrentPosition((p) => { F.$('[data-k="lat"]').value = p.coords.latitude.toFixed(6).replace('.', ','); F.$('[data-k="lon"]').value = p.coords.longitude.toFixed(6).replace('.', ','); gerar(); F.toast(`Posição com ±${Math.round(p.coords.accuracy)} m.`); },
+    () => F.toast('Não consegui a localização.', true), { enableHighAccuracy: true, timeout: 20000 });
+}
+document.querySelectorAll('[data-m]').forEach((b) => b.addEventListener('click', () => {
+  modo = b.dataset.m; document.querySelectorAll('[data-m]').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); montarCampos();
+}));
+['leg', 'nivel'].forEach((id) => F.$('#' + id).addEventListener('input', gerar));
+F.$('#nivel').addEventListener('change', gerar);
+
+function gerar() {
+  const t = conteudo(); F.$('#leg-prev').textContent = F.$('#leg').value.trim();
+  ['png', 'svg', 'pdf'].forEach((id) => (F.$('#' + id).disabled = !t));
+  if (!t) { qr = null; const c = F.$('#qr'); c.width = c.height = 10; c.getContext('2d').clearRect(0, 0, 10, 10); F.$('#info').textContent = 'Preencha os campos para gerar.'; return; }
+  try { qr = window.qrcode(0, F.$('#nivel').value); qr.addData(unescape(encodeURIComponent(t))); qr.make(); }
+  catch (e) { qr = null; F.$('#info').textContent = 'Texto grande demais para um QR code. Encurte ou use correção baixa.'; return; }
+  const n = qr.getModuleCount(); desenhar(F.$('#qr'), 8);
+  F.$('#info').textContent = `${n} × ${n} módulos · ${t.length} caracteres. Teste com a câmera do celular antes de imprimir.`;
+}
+// desenha com 4 módulos de margem branca (zona de silêncio, exigida pelos leitores)
+function desenhar(c, k) {
+  const n = qr.getModuleCount(), lado = (n + 8) * k; c.width = c.height = lado;
+  const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, lado, lado); g.fillStyle = '#000';
+  for (let r = 0; r < n; r++) for (let q = 0; q < n; q++) if (qr.isDark(r, q)) g.fillRect((q + 4) * k, (r + 4) * k, k, k);
+  return c;
+}
+const nomeArq = () => 'QR_' + ((F.$('#leg').value.trim() || modo).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/\W+/g, '_').slice(0, 40));
+F.$('#png').addEventListener('click', async () => {
+  // imagem grande (~1000 px) com a legenda embaixo
+  const q = desenhar(document.createElement('canvas'), Math.ceil(1000 / (qr.getModuleCount() + 8))), leg = F.$('#leg').value.trim();
+  const c = document.createElement('canvas'); c.width = q.width; c.height = q.height + (leg ? 110 : 0); const g = c.getContext('2d');
+  g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); g.drawImage(q, 0, 0);
+  if (leg) { g.fillStyle = '#111'; g.font = 'bold 56px sans-serif'; g.textAlign = 'center'; g.fillText(leg, c.width / 2, q.height + 50, c.width - 40); }
+  c.toBlob((b) => F.baixar(b, nomeArq() + '.png'), 'image/png');
+});
+F.$('#svg').addEventListener('click', () => {
+  const n = qr.getModuleCount(), lado = n + 8, leg = F.$('#leg').value.trim(), alt = lado + (leg ? 6 : 0); let d = '';
+  for (let r = 0; r < n; r++) for (let q = 0; q < n; q++) if (qr.isDark(r, q)) d += `M${q + 4} ${r + 4}h1v1h-1z`;
+  const x = (s) => s.replace(/[<&>]/g, (ch) => ({ '<': '&lt;', '&': '&amp;', '>': '&gt;' }[ch]));
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${lado} ${alt}" shape-rendering="crispEdges"><rect width="${lado}" height="${alt}" fill="#fff"/><path d="${d}" fill="#000"/>${leg ? `<text x="${lado / 2}" y="${lado + 3.5}" font-family="sans-serif" font-size="3" font-weight="bold" text-anchor="middle">${x(leg)}</text>` : ''}</svg>`;
+  F.baixar(new Blob([svg], { type: 'image/svg+xml' }), nomeArq() + '.svg');
+});
+F.$('#pdf').addEventListener('click', () => F.trabalhando(F.$('#pdf'), async () => {
+  if (!F.libs('PDFLib')) return;
+  const doc = await PDFLib.PDFDocument.create(), pg = doc.addPage([595.28, 841.89]), font = await doc.embedFont(PDFLib.StandardFonts.HelveticaBold);
+  const cop = +F.$('#copias').value, cols = cop === 1 ? 1 : cop === 6 ? 2 : 3, lins = cop / cols, mg = 36, cw = (595.28 - 2 * mg) / cols, ch = (841.89 - 2 * mg) / lins;
+  const leg = F.$('#leg').value.trim(), n = qr.getModuleCount(), lado = Math.min(cw, ch - (leg ? 30 : 0)) * 0.86, k = lado / (n + 8);
+  const seguro = (s) => [...s].map((c) => { try { font.encodeText(c); return c; } catch (e) { return '?'; } }).join('');
+  for (let i = 0; i < cop; i++) {
+    const cx = mg + (i % cols) * cw + (cw - lado) / 2, top = 841.89 - mg - Math.floor(i / cols) * ch - (ch - lado - (leg ? 30 : 0)) / 2;
+    for (let r = 0; r < n; r++) for (let q = 0; q < n; q++) if (qr.isDark(r, q)) pg.drawRectangle({ x: cx + (q + 4) * k, y: top - (r + 5) * k, width: k + 0.05, height: k + 0.05, color: PDFLib.rgb(0, 0, 0) });
+    if (leg) { const s = Math.min(22, lado / 10), t = seguro(leg), w = font.widthOfTextAtSize(t, s); pg.drawText(t, { x: cx + (lado - w) / 2, y: top - lado - s, size: s, font }); }
+  }
+  F.baixar(new Blob([await doc.save()], { type: 'application/pdf' }), nomeArq() + '.pdf');
+}));
+montarCampos();
+</script>
+</body>
+</html>

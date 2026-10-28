@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Ver e medir DWG</title>
+<meta name="description" content="Abra plantas DWG e DXF no celular, ligue e desligue camadas e meça distâncias e áreas. O arquivo não sai do aparelho.">
+<meta name="theme-color" content="#1F6FB2">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icon-192.png">
+<link rel="stylesheet" href="../comum/base.css">
+<style>
+:root{--brand:#1F6FB2;--cad:#15181d;--marca:#FFD60A}
+html,body{height:100%}
+body.aberto{overflow:hidden}
+.topo h1{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;flex:1}
+#vista{position:fixed;left:0;right:0;bottom:0;top:var(--topo,55px);background:var(--cad);touch-action:none;display:none}
+body.aberto #vista{display:block}
+body.aberto main{display:none}
+#tela{display:block;width:100%;height:100%;cursor:grab}
+#tela.medindo{cursor:crosshair}
+.barra{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(10px + env(safe-area-inset-bottom,0px));display:flex;gap:2px;padding:4px;
+  background:var(--panel);border:1px solid var(--line);border-radius:14px;box-shadow:0 4px 18px #0005;width:min(480px,calc(100% - 16px))}
+.barra button{flex:1 1 0;min-width:0;flex-direction:column;gap:2px;min-height:52px;padding:4px 2px;font-size:11.5px;border-color:transparent}
+.barra button svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.barra button[aria-pressed="true"]{background:var(--brand);color:#fff;border-color:var(--brand)}
+.barra .sep{width:1px;background:var(--line);margin:4px 2px;flex:none}
+#painel{position:absolute;left:8px;top:8px;right:8px;max-width:420px;background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;display:grid;gap:8px;box-shadow:0 4px 18px #0004}
+#painel .res{font-size:17px;color:var(--ink)}
+#painel .res b{color:var(--brand)}
+#painel .det{color:var(--muted);font-size:13px;margin:0;white-space:pre-line}
+#painel select{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:4px 6px;min-height:36px}
+#camadas{position:absolute;top:8px;right:8px;bottom:calc(84px + env(safe-area-inset-bottom,0px));width:min(320px,calc(100% - 16px));background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  display:flex;flex-direction:column;box-shadow:0 4px 18px #0005;z-index:3}
+#camadas header{display:flex;gap:6px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line)}
+#camadas header h2{flex:1;font-size:15px;margin:0}
+#lista-cam{overflow:auto;padding:4px 6px;flex:1}
+#lista-cam label{display:flex;align-items:center;gap:8px;padding:6px 4px;border-radius:6px;cursor:pointer;min-height:36px}
+#lista-cam label:hover{background:var(--bg)}
+#lista-cam input{width:18px;height:18px;flex:none}
+#lista-cam i{width:12px;height:12px;border-radius:50%;flex:none;box-shadow:0 0 0 1px #0006}
+#lista-cam span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#carregando{position:fixed;inset:0;display:grid;place-items:center;background:#0008;z-index:20;color:#fff;font-weight:600;text-align:center;padding:20px}
+#carregando p{margin:0 0 12px}
+#carregando .aviso{font-weight:400;font-size:14px;max-width:340px;opacity:.9}
+#carregando button{color:var(--ink)}
+#status{bottom:calc(84px + env(safe-area-inset-bottom,0px))}
+#folha{font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:4px 6px;min-height:38px;max-width:38vw}
+#exportar{position:absolute;top:8px;right:8px;bottom:calc(84px + env(safe-area-inset-bottom,0px));width:min(380px,calc(100% - 16px));background:var(--panel);border:1px solid var(--line);
+  border-radius:12px;display:flex;flex-direction:column;box-shadow:0 4px 18px #0005;z-index:4}
+#exportar header{display:flex;gap:6px;align-items:center;padding:8px 10px;border-bottom:1px solid var(--line)}
+#exportar header h2{flex:1;font-size:15px;margin:0}
+#exportar .corpo{overflow:auto;padding:10px 12px;display:grid;gap:10px;flex:1;align-content:start}
+#exportar .fmts{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+#exportar .fmts label{display:flex;gap:6px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:6px 8px;cursor:pointer;font-size:14px;min-height:40px}
+#exportar .fmts label:has(input:checked){border-color:var(--brand);background:color-mix(in srgb,var(--brand) 12%,transparent)}
+#exportar .duas{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+#exportar .rodape{padding:10px 12px;border-top:1px solid var(--line)}
+#exportar .rodape button{width:100%}
+#ex-aviso:empty{display:none}
+#ex-aviso{color:#b3261e}
+@media (prefers-color-scheme:dark){#ex-aviso{color:#f28b82}}
+details.oda{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 14px}
+details.oda summary{cursor:pointer;font-weight:600}
+details.oda ol{margin:8px 0 0;padding-left:20px;display:grid;gap:4px;color:var(--ink)}
+</style>
+</head>
+<body>
+<header class="topo"><div class="in"><a class="voltar" href="../?g=dwg">‹ DWG</a><h1 id="titulo">Ver e medir DWG</h1>
+  <select id="folha" class="hide" aria-label="Modelo ou folha de impressão"></select>
+  <label class="btn hide" id="trocar" for="arq">Abrir</label></div></header>
+<main class="wrap">
+  <p class="sub" id="intro">Abra a planta no celular, ligue e desligue camadas, veja as folhas de impressão, meça distâncias e áreas e converta para PDF, imagem, DXF, Excel, Word ou Google Earth. O arquivo não sai do aparelho.</p>
+  <div class="drop" id="drop">
+    <p>Arraste um DWG ou DXF para cá ou</p>
+    <label class="btn pri" for="arq">Escolher arquivo</label>
+    <input class="sr" id="arq" type="file" accept=".dwg,.dxf,image/vnd.dwg,image/vnd.dxf,application/acad,application/dxf">
+  </div>
+  <p class="info">DWG muito antigo ou muito novo pode não abrir; nesse caso, salve como DXF no AutoCAD.</p>
+  <details class="oda">
+    <summary>DWG pesado ou que não abre? Converta para DXF no computador</summary>
+    <p class="info">O ODA File Converter é gratuito e converte uma pasta inteira de uma vez. DXF abre bem mais rápido aqui.</p>
+    <ol>
+      <li>No computador, baixe o <b>ODA File Converter</b> no site opendesign.com (menu Guest Files › ODA File Converter) e instale.</li>
+      <li>Abra o programa. Em <b>Input Folder</b>, escolha a pasta com os DWG; em <b>Output Folder</b>, uma pasta vazia.</li>
+      <li>Em <b>Output version</b>, escolha <b>ACAD2018</b> e, em <b>Output File type</b>, <b>DXF</b>.</li>
+      <li>Clique em <b>Start</b>. Os DXF ficam na pasta de saída: mande para o celular e abra aqui.</li>
+    </ol>
+  </details>
+</main>
+
+<div id="vista">
+  <canvas id="tela" aria-label="Desenho"></canvas>
+  <section id="painel" class="hide" aria-live="polite">
+    <div class="res" id="res"></div>
+    <p class="det" id="det"></p>
+    <div class="row" style="flex-wrap:nowrap">
+      <label class="info" for="unid">Desenho em</label>
+      <select id="unid" title="Unidade em que o desenho foi feito">
+        <option value="1">metros</option>
+        <option value="0.01">centímetros</option>
+        <option value="0.001">milímetros</option>
+      </select>
+      <span style="flex:1"></span>
+      <button class="mini" type="button" id="desfazer" aria-label="Desfazer o último ponto" title="Desfazer o último ponto">↶</button>
+      <button class="mini" type="button" id="limpar" aria-label="Limpar a medida" title="Limpar a medida">✕</button>
+    </div>
+  </section>
+  <section id="camadas" class="hide" aria-label="Camadas">
+    <header><h2>Camadas</h2>
+      <button class="mini" type="button" id="cam-todas">Todas</button>
+      <button class="mini" type="button" id="cam-nenhuma">Nenhuma</button>
+      <button class="mini" type="button" id="cam-fechar" aria-label="Fechar camadas">✕</button>
+    </header>
+    <div id="lista-cam"></div>
+  </section>
+  <nav class="barra" aria-label="Ferramentas do desenho">
+    <button type="button" data-modo="mover" aria-pressed="true"><svg viewBox="0 0 24 24"><path d="M12 3v18M3 12h18M12 3l-3 3M12 3l3 3M12 21l-3-3M12 21l3-3M3 12l3-3M3 12l3 3M21 12l-3-3M21 12l-3 3"/></svg>Mover</button>
+    <button type="button" data-modo="dist" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M3 17L17 3l4 4L7 21z"/><path d="M7 13l2 2M10 10l2 2M13 7l2 2"/></svg>Distância</button>
+    <button type="button" data-modo="area" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M4 18L7 5l12 3-2 11z"/><circle cx="4" cy="18" r="1.3"/><circle cx="7" cy="5" r="1.3"/><circle cx="19" cy="8" r="1.3"/><circle cx="17" cy="19" r="1.3"/></svg>Área</button>
+    <button type="button" data-modo="cont" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M4 5h16v14H4z"/><path d="M9 12l2 2 4-4"/></svg>Contorno</button>
+    <span class="sep"></span>
+    <button type="button" id="b-camadas" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/></svg>Camadas</button>
+    <button type="button" id="b-ajustar"><svg viewBox="0 0 24 24"><path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5"/></svg>Ajustar</button>
+    <button type="button" id="b-exportar" aria-pressed="false"><svg viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg>Exportar</button>
+  </nav>
+  <section id="exportar" class="hide" aria-label="Exportar">
+    <header><h2>Exportar / converter</h2><button class="mini" type="button" id="ex-fechar" aria-label="Fechar">✕</button></header>
+    <div class="corpo">
+      <div class="fmts" role="radiogroup" aria-label="Formato">
+        <label><input type="radio" name="fmt" value="pdf" checked>PDF</label>
+        <label><input type="radio" name="fmt" value="png">Imagem PNG</label>
+        <label><input type="radio" name="fmt" value="jpg">Imagem JPG</label>
+        <label><input type="radio" name="fmt" value="svg">SVG</label>
+        <label><input type="radio" name="fmt" value="dxf">DXF</label>
+        <label><input type="radio" name="fmt" value="xlsx">Excel</label>
+        <label><input type="radio" name="fmt" value="docx">Word</label>
+        <label><input type="radio" name="fmt" value="kml">Google Earth</label>
+        <label><input type="radio" name="fmt" value="csv">Coordenadas CSV</label>
+      </div>
+      <p class="info" id="ex-desc"></p>
+      <label class="campo" id="op-oque">O que exportar
+        <select id="ex-oque">
+          <option value="folha">A folha de impressão aberta</option>
+          <option value="todo" selected>O desenho todo (modelo)</option>
+          <option value="tela">Só o que está na tela</option>
+        </select>
+      </label>
+      <div class="duas">
+        <label class="campo" id="op-papel">Papel
+          <select id="ex-papel"><option>A4</option><option selected>A3</option><option>A2</option><option>A1</option><option>A0</option></select>
+        </label>
+        <label class="campo" id="op-escala">Escala
+          <select id="ex-escala">
+            <option value="0" selected>Ajustar à folha</option>
+            <option value="20">1:20</option><option value="25">1:25</option><option value="50">1:50</option><option value="75">1:75</option>
+            <option value="100">1:100</option><option value="200">1:200</option><option value="250">1:250</option><option value="500">1:500</option>
+            <option value="1000">1:1000</option><option value="2000">1:2000</option><option value="5000">1:5000</option>
+          </select>
+        </label>
+      </div>
+      <div class="duas" id="op-cores">
+        <label class="campo">Cores
+          <select id="ex-cores"><option value="cor" selected>Coloridas</option><option value="pb">Preto e branco</option></select>
+        </label>
+        <label class="campo">Linhas
+          <select id="ex-linha"><option value="0.1">Finas</option><option value="0.18" selected>Médias</option><option value="0.3">Grossas</option></select>
+        </label>
+      </div>
+      <label class="campo" id="op-res">Resolução
+        <select id="ex-res"><option value="2400">Média (2400 px)</option><option value="4800" selected>Alta (4800 px)</option><option value="7200">Muito alta (7200 px)</option></select>
+      </label>
+      <div class="duas" id="op-utm">
+        <label class="campo">Fuso UTM
+          <select id="ex-fuso">
+            <option>18</option><option>19</option><option>20</option><option>21</option><option>22</option><option selected>23</option><option>24</option><option>25</option>
+          </select>
+        </label>
+        <label class="campo">Hemisfério
+          <select id="ex-hemis"><option value="S" selected>Sul</option><option value="N">Norte</option></select>
+        </label>
+      </div>
+      <label class="opcoes"><span style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="ex-visiveis" checked>Só as camadas ligadas na tela</span></label>
+      <p class="info" id="ex-aviso"></p>
+    </div>
+    <div class="rodape"><button class="pri" type="button" id="ex-ir">Exportar</button></div>
+  </section>
+</div>
+<div id="carregando" class="hide" role="status"><div><p id="carregando-msg">Abrindo…</p><p class="aviso" id="carregando-aviso"></p>
+  <button type="button" id="cancelar">Cancelar</button></div></div>
+<div id="status" role="status" aria-live="polite"></div>
+
+<script src="../comum/base.js"></script>
+<script src="lib.js"></script>
+<script src="pintar.js"></script>
+<script src="app.js"></script>
+<script src="exportar.js"></script>
+<script>
+// aberto pelo hub para uma conversão: título e texto de acordo
+if (alvo && TITULOS[alvo]) {
+  document.title = TITULOS[alvo];
+  F.$('#titulo').textContent = TITULOS[alvo];
+  F.$('#intro').textContent = `Abra o DWG ou DXF e escolha as opções: ${FORMATOS[alvo].desc} O arquivo não sai do aparelho.`;
+}
+</script>
+</body>
+</html>

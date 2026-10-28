@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compactação e CBR em cards</title>
+<meta name="description" content="NBR 7182 (Proctor) e NBR 9895 (CBR): energias, curva de compactação, grau de compactação e índice de suporte, em desenhos.">
+<meta name="theme-color" content="#2F5D62">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icon-192.png">
+<link rel="stylesheet" href="../comum/base.css">
+<link rel="stylesheet" href="../comum/normas.css">
+</head>
+<body>
+<header class="topo"><div class="in"><a class="voltar" href="../?g=normas">‹ Normas</a><h1>NBR 7182 e 9895 em cards</h1></div></header>
+<main class="wrap">
+  <p class="aviso">Resumo das ABNT NBR 7182 (ensaio de compactação, Proctor) e NBR 9895 (índice de suporte Califórnia, CBR). Limites de aceitação vêm da especificação da obra. Confira nas normas oficiais.</p>
+  <div class="filtros" role="toolbar" aria-label="Filtrar por tema"><input id="q" type="search" placeholder="Buscar: Proctor, GC, CBR…" aria-label="Buscar nos cards"></div>
+<div class="grade">
+
+<article class="cn">
+  <header><span class="tag">Proctor</span><span class="sec">NBR 7182</span></header>
+  <h2>Curva de compactação</h2>
+  <div class="corpo">
+    <svg class="ill" viewBox="0 0 320 150" role="img" aria-label="Curva de massa específica seca por umidade: o pico dá a massa específica seca máxima e a umidade ótima">
+      <path class="ln" d="M40 126V10M40 126H306"/>
+      <path fill="none" stroke="var(--acc)" stroke-width="3" d="M60 110C110 40 150 26 170 26S240 50 290 104"/>
+      <g class="ac"><circle cx="70" cy="96" r="4"/><circle cx="116" cy="46" r="4"/><circle cx="168" cy="27" r="4"/><circle cx="222" cy="44" r="4"/><circle cx="276" cy="90" r="4"/></g>
+      <path class="tr" d="M170 26V126M40 26H170"/>
+      <text x="44" y="22" class="a">γd máx</text><text x="170" y="140" text-anchor="middle" class="a">w ótima</text>
+      <text x="44" y="12" class="p">γd (g/cm³)</text><text x="300" y="140" text-anchor="end" class="p">umidade (%)</text>
+      <text x="90" y="80" class="p">ramo seco</text><text x="226" y="80" class="p">ramo úmido</text>
+    </svg>
+  </div>
+  <div class="dica">No mínimo 5 pontos: dois abaixo, um perto e dois acima da umidade ótima.</div>
+</article>
+
+<article class="cn">
+  <header><span class="tag">Proctor</span><span class="sec">NBR 7182 · Tab. 1</span></header>
+  <h2>Energias de compactação</h2>
+  <div class="corpo">
+    <svg class="ill" viewBox="0 0 320 88" role="img" aria-label="Soquete pequeno de 2,5 kg caindo 30,5 cm e soquete grande de 4,5 kg caindo 45,7 cm">
+      <rect class="mut" x="40" y="10" width="20" height="24" rx="2"/><path class="ln" d="M50 4v6"/><path class="dim" d="M70 36V70" marker-end="url(#sa)"/><text x="80" y="48" class="b">2,5 kg</text><text x="80" y="62" class="a">30,5 cm</text>
+      <rect class="ink" x="180" y="6" width="28" height="30" rx="2"/><path class="ln" d="M194 0v6"/><path class="dim" d="M218 38V80" marker-end="url(#sa)"/><text x="228" y="52" class="b">4,5 kg</text><text x="228" y="66" class="a">45,7 cm</text>
+    </svg>
+    <div class="tb"><table class="mini">
+      <tr><th>Cilindro pequeno</th><th>Soquete</th><th>Camadas</th><th>Golpes</th></tr>
+      <tr><td>Normal</td><td>2,5 kg</td><td>3</td><td>26</td></tr>
+      <tr><td>Intermediária</td><td>4,5 kg</td><td>3</td><td>21</td></tr>
+      <tr><td>Modificada</td><td>4,5 kg</td><td>5</td><td>27</td></tr>
+    </table></div>
+    <div class="tb"><table class="mini">
+      <tr><th>Cilindro grande</th><th>Soquete</th><th>Camadas</th><th>Golpes</th></tr>
+      <tr><td>Normal</td><td>4,5 kg</td><td>5</td><td>12</td></tr>
+      <tr><td>Intermediária</td><td>4,5 kg</td><td>5</td><td>26</td></tr>
+      <tr><td>Modificada</td><td>4,5 kg</td><td>5</td><td>55</td></tr>
+    </table></div>
+  </div>
+  <div class="dica">A energia vem do projeto: aterro e subleito costumam usar normal; base e sub-base, intermediária ou modificada.</div>
+</article>
+
+<article class="cn">
+  <header><span class="tag">Campo</span><span class="sec">especificação da obra</span></header>
+  <h2>Grau de compactação (GC)</h2>
+  <div class="corpo">
+    <svg class="ill" viewBox="0 0 320 112" role="img" aria-label="GC igual a massa específica seca de campo dividida pela máxima de laboratório vezes 100; exemplo 1,86 sobre 1,92 dá 96,9%">
+      <rect class="te" x="10" y="40" width="130" height="40"/><path class="te2" d="M10 40h130v8H10z"/><path class="ln" d="M60 40v-20h30v20"/><text x="75" y="14" text-anchor="middle" class="p">frasco de areia</text>
+      <text x="75" y="98" text-anchor="middle" class="b">campo: γd = 1,86</text>
+      <text x="160" y="34" class="b">GC = γd campo / γd máx</text>
+      <text x="160" y="58">1,86 / 1,92 × 100</text>
+      <text x="160" y="82" class="a" style="font-size:15px">= 96,9%</text>
+      <text x="160" y="102" class="p">usual: GC ≥ 95% e Δw ± 2%</text>
+    </svg>
+  </div>
+  <div class="dica">GC alto com umidade muito abaixo da ótima engana: o solo pode recalcar quando molhar.</div>
+</article>
+
+<article class="cn">
+  <header><span class="tag">CBR</span><span class="sec">NBR 9895</span></header>
+  <h2>Índice de suporte (CBR)</h2>
+  <div class="corpo">
+    <svg class="ill" viewBox="0 0 320 128" role="img" aria-label="Corpo de prova compactado na umidade ótima, imerso 4 dias, com pistão penetrando; CBR é a pressão a 2,54 ou 5,08 mm dividida pela pressão padrão">
+      <path class="ags" d="M14 50h90v66H14z"/><rect class="te" x="30" y="58" width="58" height="50"/><path class="ln" d="M14 50v66h90V50"/>
+      <rect class="cc2" x="30" y="50" width="58" height="8"/><text x="59" y="40" text-anchor="middle" class="u">imerso 4 dias</text>
+      <rect class="mut" x="148" y="10" width="14" height="54"/><rect class="te" x="126" y="64" width="58" height="50"/><path class="dim" d="M168 40V60" marker-end="url(#sa)"/>
+      <text x="196" y="30" class="b">CBR (%) =</text><text x="196" y="46">pressão medida</text><text x="196" y="60">÷ pressão padrão</text>
+      <text x="196" y="82" class="p">2,54 mm → 6,90 MPa</text><text x="196" y="96" class="p">5,08 mm → 10,35 MPa</text><text x="196" y="116" class="a">vale o maior</text>
+    </svg>
+    <div class="chips"><span>medir também a <b>expansão</b> (%) na imersão</span></div>
+  </div>
+  <div class="dica">CBR e expansão do subleito definem a espessura do pavimento. Ensaie o solo que vai realmente para a pista.</div>
+</article>
+
+</div>
+<p class="vazio hide" id="vazio">Nenhum card encontrado. Tente outra palavra ou volte para "Todos".</p>
+</main>
+<div id="status" role="status" aria-live="polite"></div>
+<script src="../comum/base.js"></script>
+<script src="../comum/normas.js"></script>
+</body>
+</html>

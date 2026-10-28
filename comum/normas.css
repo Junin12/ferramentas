@@ -1,0 +1,85 @@
+/* Normas em cards: cada card = desenho com os números da norma + uma linha "Na obra". Usa os tokens de base.css. */
+:root{
+  --brand:#2F5D62; --conc:#d3d8d5; --conc2:#bfc6c2; --steel:#2f5d62; --steel-soft:#dcebea;
+  --acc:#c2410c; --acc-soft:#fbe6da; --good:#2e7d32; --warn:#b26a00; --bad:#b3261e; --code:#f1f4f3;
+  --agua:#3d8bd9; --agua-soft:#dbeafb; --terra:#c9a27a; --terra2:#a9825a;
+}
+@media (prefers-color-scheme:dark){:root{
+  --brand:#7fc1c4; --brand-ink:#0d1f20; --conc:#3a4441; --conc2:#4a5551; --steel:#7fc1c4; --steel-soft:#1f3233;
+  --acc:#f0874f; --acc-soft:#3a2418; --good:#81c995; --warn:#f2b155; --bad:#f28b82; --code:#262c33;
+  --agua:#8ab4f8; --agua-soft:#1c2c40; --terra:#6b5640; --terra2:#85694c}}
+.topo h1{flex:1}
+.wrap,.topo .in{max-width:1180px}
+.aviso{font-size:13px;color:var(--muted);margin:0}
+.filtros{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.filtros button{min-height:36px;padding:4px 12px;border-radius:999px;font-size:14px}
+.filtros button[aria-pressed="true"]{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+#q{flex:1 1 200px;min-width:0;font:inherit;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 14px;min-height:36px}
+.grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px;align-items:start}
+@media (max-width:380px){.grade{grid-template-columns:1fr}}
+.cn{background:var(--panel);border:1px solid var(--line);border-radius:14px;display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.cn header{display:flex;justify-content:space-between;align-items:baseline;gap:8px;padding:12px 14px 0}
+.tag{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--steel);background:var(--steel-soft);padding:2px 8px;border-radius:4px}
+.sec{font:11px ui-monospace,Consolas,monospace;color:var(--muted);white-space:nowrap}
+.cn h2{font-size:18px;line-height:1.2;margin:6px 14px 8px;text-wrap:balance}
+.cn .corpo{padding:0 14px 10px;display:grid;gap:8px;min-width:0}
+.ill{width:100%;height:auto;display:block}
+.ill text{font:11px ui-monospace,Consolas,monospace;fill:var(--ink)}
+.ill .p{font-size:9.5px;fill:var(--muted)}
+.ill .a{fill:var(--acc);font-weight:700}
+.ill .b{font-weight:700}
+.ill .s{fill:var(--steel);font-weight:700}
+.ill .u{fill:var(--agua);font-weight:700}
+.ill .g{fill:var(--good);font-weight:700}.ill .w{fill:var(--warn);font-weight:700}.ill .r{fill:var(--bad);font-weight:700}
+.ill .cc{fill:var(--conc)}.ill .cc2{fill:var(--conc2)}
+.ill .fe{fill:var(--steel)}.ill .fes{fill:var(--steel-soft)}
+.ill .est{fill:none;stroke:var(--steel);stroke-width:3}
+.ill .fio{fill:none;stroke:var(--steel);stroke-width:2}
+.ill .ac{fill:var(--acc)}.ill .acs{fill:var(--acc-soft)}
+.ill .ag{fill:var(--agua)}.ill .ags{fill:var(--agua-soft)}
+.ill .te{fill:var(--terra)}.ill .te2{fill:var(--terra2)}
+.ill .gd{fill:var(--good)}.ill .wd{fill:var(--warn)}.ill .rd{fill:var(--bad)}
+.ill .dim{fill:none;stroke:var(--acc);stroke-width:1.3}
+.ill .ln{fill:none;stroke:var(--ink);stroke-width:1.5}
+.ill .lnb{fill:none;stroke:var(--ink);stroke-width:3;stroke-linecap:round;stroke-linejoin:round}
+.ill .tr{fill:none;stroke:var(--muted);stroke-width:1;stroke-dasharray:3 3}
+.ill .ink{fill:var(--ink)}.ill .mut{fill:var(--muted)}.ill .pan{fill:var(--panel)}
+.ill .bie{fill:none;stroke:var(--acc);stroke-width:2;stroke-dasharray:6 4}
+.ill .agl{fill:none;stroke:var(--agua);stroke-width:2}
+.mini{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+.mini th,.mini td{padding:4px 6px;border-bottom:1px solid var(--line);text-align:left}
+.mini th{font-size:11px;color:var(--muted);font-weight:700;text-transform:uppercase}
+.mini td:not(:first-child),.mini th:not(:first-child){text-align:center;font-family:ui-monospace,Consolas,monospace}
+.tb{overflow-x:auto}
+.f{font:12.5px/1.6 ui-monospace,Consolas,monospace;background:var(--code);border-radius:8px;padding:8px 10px;overflow-x:auto;white-space:pre}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips span{font-size:12.5px;border:1px solid var(--line);border-radius:6px;padding:3px 8px}
+.chips b{font-family:ui-monospace,Consolas,monospace}
+.dica{margin-top:auto;border-top:1px dashed var(--line);padding:9px 14px 12px;font-size:13px;display:flex;gap:8px;color:var(--ink)}
+.dica::before{content:"NA OBRA";font-size:10px;font-weight:700;letter-spacing:.06em;color:var(--acc);padding-top:2px;white-space:nowrap}
+.cn.novo{border-color:var(--acc)}
+.cn.novo .tag{background:var(--acc-soft);color:var(--acc)}
+.vazio{color:var(--muted)}
+.svgdefs{position:absolute;width:0;height:0;overflow:hidden}
+.ill .fis{fill:none;stroke:var(--ink);stroke-linecap:round;stroke-linejoin:round}
+.ill .por{fill:none;stroke:var(--ink);stroke-width:2.5;stroke-linecap:round}
+/* favoritar e enviar, no canto de cada card */
+.cn header .lado{display:flex;align-items:center;gap:4px}
+.cn .acao-card{min-height:32px;min-width:32px;padding:0 6px;border:0;background:transparent;color:var(--muted);font-size:17px;line-height:1;border-radius:8px}
+.cn .acao-card:hover{background:var(--bg);color:var(--ink)}
+.cn .acao-card[aria-pressed="true"]{color:var(--warn)}
+.cn.alvo{outline:3px solid var(--acc);outline-offset:2px}
+.cn .origem{font-size:12px;color:var(--muted);text-decoration:none;margin:0 14px 6px}
+.cn .origem:hover{color:var(--ink)}
+/* mini calculadora dentro do card */
+.calc{border:1px solid var(--line);border-radius:10px;padding:10px;display:grid;gap:8px;background:var(--bg)}
+.calc .tit{font-size:11px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--acc)}
+.calc .campos{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:8px}
+.calc label{display:grid;gap:3px;font-size:12.5px;color:var(--muted)}
+.calc input,.calc select,.calc textarea{font:inherit;font-size:15px;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:6px 8px;min-height:38px;width:100%}
+.calc textarea{min-height:70px;font-family:ui-monospace,Consolas,monospace;font-size:13px}
+.calc .res{font-size:14px;color:var(--ink);font-weight:400}
+.calc .res b{font-size:17px;color:var(--acc)}
+.calc .res .ok{color:var(--good);font-weight:700}.calc .res .nok{color:var(--bad);font-weight:700}
+.secao-tit{font-size:13px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:6px 0 -4px}
+.cn{scroll-margin-top:72px}

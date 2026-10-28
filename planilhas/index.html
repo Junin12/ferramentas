@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Juntar e limpar planilhas</title>
+<meta name="description" content="Junte planilhas CSV ou Excel, filtre, tire linhas repetidas, ordene e escolha colunas, direto no aparelho.">
+<meta name="theme-color" content="#107C41">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icon-192.png">
+<link rel="stylesheet" href="../comum/base.css">
+<style>
+:root{--brand:#107C41}
+.grade2{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.tbl{overflow:auto;max-height:55vh;border:1px solid var(--line);border-radius:10px}
+table{border-collapse:collapse;font-size:13px;width:max-content;min-width:100%}
+th,td{border-bottom:1px solid var(--line);padding:4px 8px;text-align:left;white-space:nowrap;max-width:280px;overflow:hidden;text-overflow:ellipsis}
+th{position:sticky;top:0;background:var(--panel)}
+.cols{display:flex;flex-wrap:wrap;gap:6px 14px}
+.cols label{display:flex;gap:4px;align-items:center;font-size:14px}
+</style>
+</head>
+<body>
+<header class="topo"><div class="in"><a class="voltar" href="../?g=util">‹ Utilidades</a><h1>Juntar e limpar planilhas</h1></div></header>
+<main class="wrap">
+  <p class="sub">CSV ou Excel. Vários arquivos com as mesmas colunas viram um só (colunas casadas pelo nome). Nada é enviado a servidor.</p>
+  <div class="drop" id="drop">
+    <p>Arraste as planilhas para cá ou</p>
+    <label class="btn pri" for="arq">Escolher arquivos</label>
+    <input class="sr" id="arq" type="file" accept=".csv,.txt,.xlsx,.xls,.ods" multiple>
+  </div>
+  <ul class="lista" id="arqs"></ul>
+  <section class="card hide" id="ops">
+    <h2>Arrumar</h2>
+    <div class="grade2">
+      <label class="campo">Filtrar: coluna<select id="fcol"></select></label>
+      <label class="campo">contém<input id="ftxt" type="search" placeholder="texto (vazio = tudo)"></label>
+      <label class="campo">Ordenar por<select id="ocol"></select></label>
+      <label class="campo">Ordem<select id="odir"><option value="1">crescente</option><option value="-1">decrescente</option></select></label>
+    </div>
+    <div class="opcoes">
+      <label><input type="checkbox" id="dup"> <span>Tirar linhas repetidas<small>Iguais nas colunas marcadas abaixo</small></span></label>
+      <label><input type="checkbox" id="vaz" checked> <span>Tirar linhas vazias</span></label>
+      <label><input type="checkbox" id="orig"> <span>Pôr uma coluna com o nome do arquivo de origem</span></label>
+    </div>
+    <p class="info">Colunas (desmarque para tirar da planilha final):</p>
+    <div class="cols" id="cols"></div>
+  </section>
+  <section class="card hide" id="sec-prev">
+    <h2 id="prev-tit">Prévia</h2>
+    <div class="tbl"><table id="tab"></table></div>
+  </section>
+</main>
+<div class="acao"><div class="in">
+  <button type="button" id="xlsx" disabled>Excel</button>
+  <button type="button" class="pri" id="csv" disabled>CSV</button>
+</div></div>
+<div id="status" role="status" aria-live="polite"></div>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" crossorigin="anonymous"></script>
+<script src="../comum/base.js"></script>
+<script>
+'use strict';
+const arquivos = []; // {nome, cab:[...], linhas:[[...]]}
+let cab = [], marcadas = new Set(), resultado = { cab: [], linhas: [] };
+const norm = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
+
+// ---------- leitura ----------
+// texto: UTF-8; se vier com caracteres quebrados, é o Windows-1252 do Excel brasileiro
+function texto(buf) {
+  const u = new TextDecoder('utf-8').decode(buf);
+  return u.includes('�') ? new TextDecoder('windows-1252').decode(buf) : u.replace(/^﻿/, '');
+}
+// separador: o que mais aparece na 1ª linha (fora de aspas) entre ; , tab e |
+function separador(t) {
+  const l = t.split(/\r?\n/).find((x) => x.trim()) || '', cont = { ';': 0, ',': 0, '\t': 0, '|': 0 }; let asp = false;
+  for (const ch of l) { if (ch === '"') asp = !asp; else if (!asp && ch in cont) cont[ch]++; }
+  return Object.entries(cont).sort((a, b) => b[1] - a[1])[0][1] ? Object.entries(cont).sort((a, b) => b[1] - a[1])[0][0] : ';';
+}
+// CSV com aspas, aspas duplicadas e quebra de linha dentro do campo
+function csv(t, sep) {
+  const L = []; let lin = [], cel = '', asp = false;
+  for (let i = 0; i < t.length; i++) {
+    const ch = t[i];
+    if (asp) { if (ch === '"') { if (t[i + 1] === '"') { cel += '"'; i++; } else asp = false; } else cel += ch; }
+    else if (ch === '"') asp = true;
+    else if (ch === sep) { lin.push(cel); cel = ''; }
+    else if (ch === '\n' || ch === '\r') { if (ch === '\r' && t[i + 1] === '\n') i++; lin.push(cel); L.push(lin); lin = []; cel = ''; }
+    else cel += ch;
+  }
+  if (cel !== '' || lin.length) { lin.push(cel); L.push(lin); }
+  return L;
+}
+F.entrada(F.$('#drop'), F.$('#arq'), async (fs) => {
+  for (const f of fs) {
+    try {
+      let L;
+      if (/\.(xlsx|xls|ods)$/i.test(f.name)) {
+        if (!F.libs('XLSX')) return;
+        const wb = XLSX.read(await f.arrayBuffer(), { type: 'array', cellDates: true });
+        L = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false, defval: '' });
+      } else { const t = texto(await f.arrayBuffer()); L = csv(t, separador(t)); }
+      L = L.filter((l) => l.some((c) => String(c).trim()));
+      if (!L.length) { F.toast(`“${f.name}” está vazio.`, true); continue; }
+      const c0 = L[0].map((c, i) => String(c).trim() || `Coluna ${i + 1}`);
+      arquivos.push({ nome: f.name, cab: c0, linhas: L.slice(1).map((l) => c0.map((_, i) => String(l[i] ?? ''))) });
+    } catch (e) { F.toast(`Não consegui ler “${f.name}”.`, true); }
+  }
+  juntarCabecalhos(); atualizar();
+});
+// colunas de todos os arquivos, casadas pelo nome (sem acento e maiúsculas)
+function juntarCabecalhos() {
+  const visto = new Map(); for (const a of arquivos) for (const c of a.cab) if (!visto.has(norm(c))) visto.set(norm(c), c);
+  cab = [...visto.values()]; marcadas = new Set(cab.map(norm));
+  const opts = (sel, primeiro) => { const s = F.$(sel); s.replaceChildren(...[[ '', primeiro ], ...cab.map((c) => [norm(c), c])].map(([v, t]) => { const o = document.createElement('option'); o.value = v; o.textContent = t; return o; })); };
+  opts('#fcol', 'qualquer coluna'); opts('#ocol', 'sem ordenar');
+  F.$('#cols').replaceChildren(...cab.map((c) => { const l = document.createElement('label'), i = document.createElement('input'); i.type = 'checkbox'; i.checked = true;
+    i.onchange = () => { if (i.checked) marcadas.add(norm(c)); else marcadas.delete(norm(c)); atualizar(); }; l.append(i, c); return l; }));
+  F.$('#arqs').replaceChildren(...arquivos.map((a, k) => { const li = document.createElement('li'); li.className = 'item';
+    li.innerHTML = '<div class="nm"><b></b><small></small></div><button type="button" class="mini" aria-label="Tirar">✕</button>';
+    li.querySelector('b').textContent = a.nome; li.querySelector('small').textContent = `${a.linhas.length.toLocaleString('pt-BR')} linhas · ${a.cab.length} colunas`;
+    li.querySelector('button').onclick = () => { arquivos.splice(k, 1); juntarCabecalhos(); atualizar(); }; return li; }));
+}
+
+// ---------- tratamento ----------
+// número no jeito brasileiro (1.234,56) ou americano, para ordenar certo
+const numero = (s) => { const t = String(s).trim().replace(/^R\$\s*/, ''); if (!/^-?[\d.,]+$/.test(t)) return null;
+  const br = /,\d{1,3}$/.test(t) || /\.\d{3},/.test(t) || /^-?\d{1,3}(\.\d{3})+$/.test(t); // 1.234,56 · 12,5 · 1.234 (milhar)
+  const v = parseFloat(br ? t.replace(/\./g, '').replace(',', '.') : t.replace(/,/g, '')); return Number.isFinite(v) ? v : null; };
+const dataBr = (s) => { const m = String(s).match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/); return m ? `${m[3].padStart(4, '20')}${m[2].padStart(2, '0')}${m[1].padStart(2, '0')}` : null; };
+function atualizar() {
+  const tem = arquivos.length; ['#ops', '#sec-prev'].forEach((s) => F.$(s).classList.toggle('hide', !tem)); F.$('#csv').disabled = F.$('#xlsx').disabled = !tem;
+  if (!tem) return;
+  const keys = cab.map(norm), orig = F.$('#orig').checked;
+  let L = arquivos.flatMap((a) => { const idx = keys.map((k) => a.cab.findIndex((c) => norm(c) === k)); return a.linhas.map((l) => ({ v: idx.map((i) => (i < 0 ? '' : l[i])), a: a.nome })); });
+  if (F.$('#vaz').checked) L = L.filter((x) => x.v.some((c) => c.trim()));
+  const fc = F.$('#fcol').value, ft = norm(F.$('#ftxt').value);
+  if (ft) L = L.filter((x) => (fc ? [x.v[keys.indexOf(fc)]] : x.v).some((c) => norm(c).includes(ft)));
+  const vis = keys.map((k, i) => (marcadas.has(k) ? i : -1)).filter((i) => i >= 0);
+  if (F.$('#dup').checked) { const vistos = new Set(); L = L.filter((x) => { const k = vis.map((i) => norm(x.v[i])).join('\u0001'); if (vistos.has(k)) return false; vistos.add(k); return true; }); }
+  const oc = F.$('#ocol').value;
+  if (oc) { const i = keys.indexOf(oc), d = +F.$('#odir').value;
+    L.sort((a, b) => { const x = a.v[i], y = b.v[i], dx = dataBr(x), dy = dataBr(y), nx = numero(x), ny = numero(y);
+      return d * (dx && dy ? dx.localeCompare(dy) : nx != null && ny != null ? nx - ny : x.localeCompare(y, 'pt-BR', { numeric: true })); }); }
+  resultado = { cab: [...(orig ? ['Arquivo'] : []), ...vis.map((i) => cab[i])], linhas: L.map((x) => [...(orig ? [x.a] : []), ...vis.map((i) => x.v[i])]) };
+  const total = arquivos.reduce((s, a) => s + a.linhas.length, 0);
+  F.$('#prev-tit').textContent = `Prévia · ${resultado.linhas.length.toLocaleString('pt-BR')} linhas${resultado.linhas.length !== total ? ` (de ${total.toLocaleString('pt-BR')})` : ''} · ${resultado.cab.length} colunas`;
+  const tab = F.$('#tab'), tr = (cels, th) => { const r = document.createElement('tr'); for (const c of cels) { const e = document.createElement(th ? 'th' : 'td'); e.textContent = c; e.title = c; r.append(e); } return r; };
+  tab.replaceChildren(tr(resultado.cab, true), ...resultado.linhas.slice(0, 200).map((l) => tr(l)));
+}
+['#ftxt'].forEach((s) => F.$(s).addEventListener('input', atualizar));
+['#fcol', '#ocol', '#odir', '#dup', '#vaz', '#orig'].forEach((s) => F.$(s).addEventListener('change', atualizar));
+const nomeSaida = () => (arquivos.length === 1 ? F.nomeBase(arquivos[0].nome) + '_tratada' : `Planilhas_juntas_${new Date().toISOString().slice(0, 10)}`);
+// CSV com ponto e vírgula e BOM: abre certo no Excel em português
+F.$('#csv').addEventListener('click', () => {
+  const q = (c) => (/[;"\n\r]/.test(c) ? `"${String(c).replace(/"/g, '""')}"` : c);
+  F.baixar(new Blob(['﻿' + [resultado.cab, ...resultado.linhas].map((l) => l.map(q).join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' }), nomeSaida() + '.csv');
+});
+F.$('#xlsx').addEventListener('click', () => {
+  if (!F.libs('XLSX')) return;
+  // números viram número de verdade na planilha (dá para somar)
+  const L = resultado.linhas.map((l) => l.map((c) => { const n = numero(c); return n != null && !/^0\d/.test(String(c).trim()) ? n : c; }));
+  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([resultado.cab, ...L]), 'Planilha');
+  F.baixar(new Blob([XLSX.write(wb, { type: 'array', bookType: 'xlsx' })], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), nomeSaida() + '.xlsx');
+});
+</script>
+</body>
+</html>

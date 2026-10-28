@@ -1,0 +1,213 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conversor de coordenadas</title>
+<meta name="description" content="UTM e latitude/longitude em SIRGAS 2000, SAD 69 e Córrego Alegre, um ponto ou uma lista inteira.">
+<meta name="theme-color" content="#2E7D4F">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icon-192.png">
+<link rel="stylesheet" href="../comum/base.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{--brand:#2E7D4F}
+.modo{display:flex;gap:6px}
+.modo button{flex:1}
+.modo button[aria-pressed="true"]{border-color:var(--brand);color:var(--brand);font-weight:700}
+.grade2{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px}
+textarea{font:14px/1.4 ui-monospace,Consolas,monospace;color:var(--ink);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 10px;width:100%;min-height:120px}
+.tbl{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{border-bottom:1px solid var(--line);padding:5px 6px;text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+#mapa{height:300px;border-radius:12px;overflow:hidden}
+.erro{color:#b3261e}
+</style>
+</head>
+<body>
+<header class="topo"><div class="in"><a class="voltar" href="../?g=mapa">‹ Mapa e coordenadas</a><h1>Conversor de coordenadas</h1></div></header>
+<main class="wrap">
+  <p class="sub">Converte UTM ↔ latitude e longitude e muda o datum (SAD 69 e Córrego Alegre para SIRGAS 2000). Cole uma lista inteira da topografia, uma linha por ponto.</p>
+  <div class="modo" role="group" aria-label="Converter de">
+    <button type="button" data-m="utm" aria-pressed="true">UTM → Lat/Lon</button>
+    <button type="button" data-m="geo" aria-pressed="false">Lat/Lon → UTM</button>
+  </div>
+  <section class="card">
+    <div class="grade2">
+      <label class="campo">Datum dos dados
+        <select id="datum"><option value="sirgas">SIRGAS 2000 (= WGS 84 no GPS)</option><option value="sad69">SAD 69</option><option value="ca">Córrego Alegre</option></select>
+      </label>
+      <label class="campo" id="c-fuso">Fuso UTM
+        <select id="fuso"></select>
+      </label>
+      <label class="campo" id="c-hemi">Hemisfério
+        <select id="hemi"><option value="S">Sul</option><option value="N">Norte</option></select>
+      </label>
+      <label class="campo">Saída em
+        <select id="saida"><option value="sirgas">SIRGAS 2000</option><option value="mesmo">O mesmo datum da entrada</option></select>
+      </label>
+    </div>
+    <label class="campo" id="rot-ent">Pontos (nome; E; N — ou só E; N)
+      <textarea id="ent" spellcheck="false" placeholder="P1; 196500,25; 7813210,80&#10;P2  196620.4  7813150.1"></textarea>
+    </label>
+    <p class="info" id="dica-ent">Separe por ponto e vírgula, tabulação ou espaço. Vírgula decimal ou ponto, os dois servem.</p>
+  </section>
+  <p class="erro hide" id="erros"></p>
+  <section class="card hide" id="res">
+    <h2 id="res-tit">Resultado</h2>
+    <div class="tbl"><table id="tab"></table></div>
+    <div id="mapa"></div>
+  </section>
+</main>
+<div class="acao"><div class="in">
+  <button type="button" id="csv" disabled>CSV</button>
+  <button type="button" id="kml" disabled>KML</button>
+  <button type="button" class="pri" id="conv">Converter</button>
+</div></div>
+<div id="status" role="status" aria-live="polite"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js" crossorigin="anonymous"></script>
+<script src="../comum/base.js"></script>
+<script>
+'use strict';
+// ---------- geodésia ----------
+const ELIPS = { grs80: { a: 6378137, f: 1 / 298.257222101 }, grs67: { a: 6378160, f: 1 / 298.25 }, hayford: { a: 6378388, f: 1 / 297 } };
+// datum → elipsoide e deslocamento para SIRGAS 2000 (parâmetros oficiais do IBGE, translação em metros)
+const DATUM = { sirgas: { e: 'grs80', d: [0, 0, 0], nome: 'SIRGAS 2000' }, sad69: { e: 'grs67', d: [-67.35, 3.88, -38.22], nome: 'SAD 69' },
+  ca: { e: 'hayford', d: [-206.05, 168.28, -3.82], nome: 'Córrego Alegre' } };
+const RAD = Math.PI / 180;
+function geoParaXyz(lat, lon, el, h = 0) {
+  const { a, f } = ELIPS[el], e2 = f * (2 - f), s = Math.sin(lat * RAD), N = a / Math.sqrt(1 - e2 * s * s);
+  return [(N + h) * Math.cos(lat * RAD) * Math.cos(lon * RAD), (N + h) * Math.cos(lat * RAD) * Math.sin(lon * RAD), (N * (1 - e2) + h) * s];
+}
+function xyzParaGeo(x, y, z, el) {
+  const { a, f } = ELIPS[el], e2 = f * (2 - f), p = Math.hypot(x, y), lon = Math.atan2(y, x);
+  let lat = Math.atan2(z, p * (1 - e2));
+  for (let i = 0; i < 6; i++) { const s = Math.sin(lat), N = a / Math.sqrt(1 - e2 * s * s); lat = Math.atan2(z + e2 * N * s, p); }
+  return [lat / RAD, lon / RAD];
+}
+// muda de datum por translação geocêntrica (de → SIRGAS e SIRGAS → de)
+function mudarDatum(lat, lon, de, para) {
+  if (de === para) return [lat, lon];
+  let [x, y, z] = geoParaXyz(lat, lon, DATUM[de].e);
+  x += DATUM[de].d[0] - DATUM[para].d[0]; y += DATUM[de].d[1] - DATUM[para].d[1]; z += DATUM[de].d[2] - DATUM[para].d[2];
+  return xyzParaGeo(x, y, z, DATUM[para].e);
+}
+// UTM (Snyder): fator k0 = 0,9996, falso leste 500 km, falso norte 10.000 km no sul
+const K0 = 0.9996;
+function arcoMeridiano(phi, a, e2) {
+  const e4 = e2 * e2, e6 = e4 * e2;
+  return a * ((1 - e2 / 4 - 3 * e4 / 64 - 5 * e6 / 256) * phi - (3 * e2 / 8 + 3 * e4 / 32 + 45 * e6 / 1024) * Math.sin(2 * phi)
+    + (15 * e4 / 256 + 45 * e6 / 1024) * Math.sin(4 * phi) - (35 * e6 / 3072) * Math.sin(6 * phi));
+}
+function geoParaUtm(lat, lon, el, fuso) {
+  const { a, f } = ELIPS[el], e2 = f * (2 - f), ep2 = e2 / (1 - e2), phi = lat * RAD, l0 = (fuso * 6 - 183) * RAD;
+  const N = a / Math.sqrt(1 - e2 * Math.sin(phi) ** 2), T = Math.tan(phi) ** 2, C = ep2 * Math.cos(phi) ** 2, A = Math.cos(phi) * (lon * RAD - l0), M = arcoMeridiano(phi, a, e2);
+  const E = K0 * N * (A + (1 - T + C) * A ** 3 / 6 + (5 - 18 * T + T * T + 72 * C - 58 * ep2) * A ** 5 / 120) + 500000;
+  let Nn = K0 * (M + N * Math.tan(phi) * (A * A / 2 + (5 - T + 9 * C + 4 * C * C) * A ** 4 / 24 + (61 - 58 * T + T * T + 600 * C - 330 * ep2) * A ** 6 / 720));
+  if (lat < 0) Nn += 10000000;
+  return [E, Nn];
+}
+function utmParaGeo(E, Nn, el, fuso, sul) {
+  const { a, f } = ELIPS[el], e2 = f * (2 - f), ep2 = e2 / (1 - e2), e1 = (1 - Math.sqrt(1 - e2)) / (1 + Math.sqrt(1 - e2)), l0 = (fuso * 6 - 183) * RAD;
+  const M = (sul ? Nn - 10000000 : Nn) / K0, mu = M / (a * (1 - e2 / 4 - 3 * e2 * e2 / 64 - 5 * e2 ** 3 / 256));
+  const p1 = mu + (3 * e1 / 2 - 27 * e1 ** 3 / 32) * Math.sin(2 * mu) + (21 * e1 * e1 / 16 - 55 * e1 ** 4 / 32) * Math.sin(4 * mu) + (151 * e1 ** 3 / 96) * Math.sin(6 * mu) + (1097 * e1 ** 4 / 512) * Math.sin(8 * mu);
+  const N1 = a / Math.sqrt(1 - e2 * Math.sin(p1) ** 2), T1 = Math.tan(p1) ** 2, C1 = ep2 * Math.cos(p1) ** 2, R1 = a * (1 - e2) / (1 - e2 * Math.sin(p1) ** 2) ** 1.5, D = (E - 500000) / (N1 * K0);
+  const lat = p1 - (N1 * Math.tan(p1) / R1) * (D * D / 2 - (5 + 3 * T1 + 10 * C1 - 4 * C1 * C1 - 9 * ep2) * D ** 4 / 24 + (61 + 90 * T1 + 298 * C1 + 45 * T1 * T1 - 252 * ep2 - 3 * C1 * C1) * D ** 6 / 720);
+  const lon = l0 + (D - (1 + 2 * T1 + C1) * D ** 3 / 6 + (5 - 2 * C1 + 28 * T1 - 3 * C1 * C1 + 8 * ep2 + 24 * T1 * T1) * D ** 5 / 120) / Math.cos(p1);
+  return [lat / RAD, lon / RAD];
+}
+const fusoDe = (lon) => Math.min(60, Math.max(1, Math.floor((lon + 180) / 6) + 1));
+
+// ---------- leitura ----------
+// número com vírgula ou ponto decimal; graus no formato 19°45'30,5"S também
+function numero(s) {
+  s = String(s).trim(); if (!s) return NaN;
+  const g = s.match(/^(-?\d+(?:[.,]\d+)?)\s*[°º:d ]\s*(\d+(?:[.,]\d+)?)?\s*['′m:]?\s*(\d+(?:[.,]\d+)?)?\s*["″s]?\s*([NSLOEW])?$/i);
+  if (g && (g[2] || g[4])) {
+    const n = (x) => +String(x || 0).replace(',', '.'), v = Math.abs(n(g[1])) + n(g[2]) / 60 + n(g[3]) / 3600;
+    return (/^-/.test(g[1]) || /[SOW]/i.test(g[4] || '')) ? -v : v;
+  }
+  if (/^-?\d{1,3}(\.\d{3})+(,\d+)?$/.test(s)) s = s.replace(/\./g, '').replace(',', '.'); // 7.813.210,80
+  else s = s.replace(',', '.');
+  const v = Number(s); return Number.isFinite(v) ? v : NaN;
+}
+function linhas(txt) {
+  return String(txt).split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map((l, k) => {
+    // separa por ; tab ou espaço; vírgula só separa quando não é decimal (há ;, tab ou espaços)
+    let p = l.split(/\s*[;\t]\s*/); if (p.length < 2) p = l.split(/\s+/); if (p.length < 2) p = l.split(/,(?=\s*-?\d)/);
+    p = p.filter((x) => x !== '');
+    const nums = p.map(numero), nome = Number.isNaN(nums[0]) ? p[0] : `P${k + 1}`, v = Number.isNaN(nums[0]) ? nums.slice(1) : nums;
+    return { nome, a: v[0], b: v[1], linha: k + 1, txt: l };
+  });
+}
+
+// ---------- tela ----------
+let modo = 'utm', resultado = [];
+F.$('#fuso').replaceChildren(...Array.from({ length: 60 }, (_, i) => { const o = document.createElement('option'); o.value = i + 1; o.textContent = `${i + 1} (MC ${i * 6 - 177}°)`; return o; }));
+F.$('#fuso').value = 23;
+function mudarModo(m) {
+  modo = m; document.querySelectorAll('[data-m]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.m === m)));
+  F.$('#c-hemi').classList.toggle('hide', m !== 'utm'); F.$('#c-fuso').classList.toggle('hide', m !== 'utm'); // de lat/lon o fuso sai do próprio ponto
+  F.$('#rot-ent').firstChild.textContent = m === 'utm' ? 'Pontos (nome; E; N — ou só E; N)' : 'Pontos (nome; latitude; longitude)';
+  F.$('#ent').placeholder = m === 'utm' ? 'P1; 196500,25; 7813210,80\nP2  196620.4  7813150.1' : 'P1; -19,7500; -47,9300\nP2; 19°45\'10"S; 47°55\'48"O';
+}
+document.querySelectorAll('[data-m]').forEach((b) => b.addEventListener('click', () => mudarModo(b.dataset.m)));
+const f2 = (v, d) => v.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
+const gms = (v, pos, neg) => { const s = v < 0 ? neg : pos, a = Math.abs(v), g = Math.floor(a), m = Math.floor((a - g) * 60), x = ((a - g) * 60 - m) * 60; return `${g}°${String(m).padStart(2, '0')}'${f2(x, 3)}"${s}`; };
+function converter() {
+  const de = F.$('#datum').value, para = F.$('#saida').value === 'mesmo' ? de : 'sirgas', fuso = +F.$('#fuso').value, sul = F.$('#hemi').value === 'S', erros = [];
+  resultado = [];
+  for (const p of linhas(F.$('#ent').value)) {
+    if (!Number.isFinite(p.a) || !Number.isFinite(p.b)) { erros.push(`Linha ${p.linha}: não entendi “${p.txt}”.`); continue; }
+    if (modo === 'utm') {
+      if (p.a < 100000 || p.a > 900000 || p.b < 0 || p.b > 10000000) { erros.push(`Linha ${p.linha}: E ou N fora da faixa UTM.`); continue; }
+      const [la0, lo0] = utmParaGeo(p.a, p.b, DATUM[de].e, fuso, sul), [lat, lon] = mudarDatum(la0, lo0, de, para);
+      const [E2, N2] = para === de ? [p.a, p.b] : geoParaUtm(lat, lon, DATUM[para].e, fuso);
+      resultado.push({ nome: p.nome, lat, lon, E: E2, N: N2, fuso, E0: p.a, N0: p.b });
+    } else {
+      if (Math.abs(p.a) > 90 || Math.abs(p.b) > 180) { erros.push(`Linha ${p.linha}: latitude ou longitude fora da faixa.`); continue; }
+      const [lat, lon] = mudarDatum(p.a, p.b, de, para), fz = fusoDe(lon), [E, N] = geoParaUtm(lat, lon, DATUM[para].e, fz);
+      resultado.push({ nome: p.nome, lat, lon, E, N, fuso: fz });
+    }
+  }
+  F.$('#erros').textContent = erros.join(' '); F.$('#erros').classList.toggle('hide', !erros.length);
+  F.$('#res').classList.toggle('hide', !resultado.length); F.$('#csv').disabled = F.$('#kml').disabled = !resultado.length;
+  if (!resultado.length) return;
+  F.$('#res-tit').textContent = `Resultado em ${DATUM[para].nome} · ${resultado.length} ponto${resultado.length > 1 ? 's' : ''}`;
+  const cab = ['Ponto', 'Latitude', 'Longitude', 'E (m)', 'N (m)', 'Fuso'], tab = F.$('#tab');
+  tab.innerHTML = '';
+  const tr = (cels, th) => { const r = document.createElement('tr'); for (const c of cels) { const e = document.createElement(th ? 'th' : 'td'); e.textContent = c; r.append(e); } return r; };
+  tab.append(tr(cab, true), ...resultado.map((r) => tr([r.nome, `${f2(r.lat, 7)}\n${gms(r.lat, 'N', 'S')}`, `${f2(r.lon, 7)}\n${gms(r.lon, 'L', 'O')}`, f2(r.E, 3), f2(r.N, 3), String(r.fuso) + (r.lat < 0 ? 'S' : 'N')])));
+  tab.querySelectorAll('td').forEach((td) => (td.style.whiteSpace = 'pre'));
+  desenharMapa();
+}
+let mapa = null, camada = null;
+function desenharMapa() {
+  if (!window.L) return;
+  if (!mapa) {
+    mapa = L.map('mapa', { attributionControl: false });
+    L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 21, maxNativeZoom: 18 }).addTo(mapa);
+  }
+  camada?.remove(); camada = L.layerGroup().addTo(mapa);
+  // o satélite está em WGS 84: mostra sempre o ponto em SIRGAS
+  const pts = resultado.map((r) => (F.$('#saida').value === 'mesmo' ? mudarDatum(r.lat, r.lon, F.$('#datum').value, 'sirgas') : [r.lat, r.lon]));
+  pts.forEach((p, i) => L.circleMarker(p, { radius: 7, color: '#fff', weight: 2, fillColor: '#E2544A', fillOpacity: 1 }).bindTooltip(resultado[i].nome).addTo(camada));
+  mapa.fitBounds(pts, { padding: [30, 30], maxZoom: 18 }); setTimeout(() => mapa.invalidateSize(), 200);
+}
+F.$('#conv').addEventListener('click', converter);
+F.$('#csv').addEventListener('click', () => {
+  const l = [['Ponto', 'Latitude', 'Longitude', 'E', 'N', 'Fuso'], ...resultado.map((r) => [r.nome, r.lat.toFixed(8), r.lon.toFixed(8), r.E.toFixed(3), r.N.toFixed(3), r.fuso])];
+  F.baixar(new Blob(['﻿' + l.map((x) => x.join(';')).join('\r\n')], { type: 'text/csv;charset=utf-8' }), 'coordenadas.csv');
+});
+F.$('#kml').addEventListener('click', () => {
+  const x = (s) => String(s).replace(/[<&>]/g, (c) => ({ '<': '&lt;', '&': '&amp;', '>': '&gt;' }[c]));
+  const pts = resultado.map((r) => (F.$('#saida').value === 'mesmo' ? [...mudarDatum(r.lat, r.lon, F.$('#datum').value, 'sirgas'), r] : [r.lat, r.lon, r]));
+  const kml = `<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>Coordenadas</name>${pts.map(([la, lo, r]) => `<Placemark><name>${x(r.nome)}</name><description>E ${r.E.toFixed(3)} N ${r.N.toFixed(3)} fuso ${r.fuso}</description><Point><coordinates>${lo.toFixed(8)},${la.toFixed(8)},0</coordinates></Point></Placemark>`).join('')}</Document></kml>`;
+  F.baixar(new Blob([kml], { type: 'application/vnd.google-earth.kml+xml' }), 'coordenadas.kml');
+});
+mudarModo('utm');
+</script>
+</body>
+</html>

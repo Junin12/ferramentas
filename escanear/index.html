@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Escanear documento</title>
+<meta name="description" content="Foto de documento vira PDF: recorte, endireite e deixe legível, direto no celular.">
+<meta name="theme-color" content="#d93025">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icon-192.png">
+<link rel="stylesheet" href="../comum/base.css">
+<style>
+#editor{display:grid;gap:10px}
+.palco{position:relative;touch-action:none;background:#111;border-radius:10px;overflow:hidden;justify-self:center;max-width:100%}
+.palco canvas{display:block;max-width:100%;height:auto}
+.filtros{display:flex;gap:6px;flex-wrap:wrap}
+.filtros button[aria-pressed="true"]{border-color:var(--brand);color:var(--brand);font-weight:600}
+.item canvas{width:52px;height:52px;object-fit:cover;border-radius:6px;flex:none;background:#fff}
+</style>
+</head>
+<body>
+<header class="topo"><div class="in"><a class="voltar" href="../?g=pdf">‹ PDF</a><h1>Escanear documento</h1></div></header>
+<main class="wrap">
+  <p class="sub">Tire a foto do papel: arraste os 4 cantos até as pontas da folha e o app endireita, tira a sombra e monta o PDF. Nada é enviado a servidor.</p>
+  <div class="drop" id="drop">
+    <p>Foto de nota, romaneio, ficha ou contrato</p>
+    <div class="row">
+      <label class="btn pri" for="foto">Tirar foto</label>
+      <label class="btn" for="arq">Escolher da galeria</label>
+    </div>
+    <input class="sr" id="foto" type="file" accept="image/*" capture="environment">
+    <input class="sr" id="arq" type="file" accept="image/*" multiple>
+  </div>
+  <section class="card hide" id="editor">
+    <h2 id="ed-tit">Ajuste os cantos</h2>
+    <div class="palco" id="palco"><canvas id="tela"></canvas></div>
+    <p class="info">Arraste as bolinhas até os cantos da folha.</p>
+    <div class="filtros" role="group" aria-label="Acabamento">
+      <button type="button" data-f="doc" aria-pressed="true">Documento (preto e branco)</button>
+      <button type="button" data-f="cinza" aria-pressed="false">Tons de cinza</button>
+      <button type="button" data-f="cor" aria-pressed="false">Colorido</button>
+    </div>
+    <div class="row">
+      <button type="button" id="girar">↻ Girar</button>
+      <button type="button" id="descartar">Descartar foto</button>
+      <button type="button" class="pri" id="ok" style="flex:1">✓ Usar esta página</button>
+    </div>
+  </section>
+  <ol class="lista" id="lista" aria-label="Páginas escaneadas"></ol>
+  <section class="card hide" id="opcoes">
+    <h2>Documento</h2>
+    <label class="campo">Nome do arquivo<input id="nome" type="text" maxlength="80" placeholder="Ex.: NF 1234 areia"></label>
+    <label class="opcoes" style="display:flex"><span><input type="checkbox" id="ocr"> Texto pesquisável (OCR)
+      <small>Dá para buscar e copiar o texto no PDF. Na primeira vez baixa o leitor de texto (~15 MB) e leva uns segundos por página.</small></span></label>
+  </section>
+</main>
+<div class="acao"><div class="in">
+  <button type="button" id="jpg" disabled>JPG</button>
+  <button class="pri" id="gerar" type="button" disabled>Gerar PDF</button>
+</div></div>
+<div id="status" role="status" aria-live="polite"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" crossorigin="anonymous"></script>
+<script src="../comum/base.js"></script>
+<script>
+'use strict';
+const paginas = []; // {canvas} já endireitadas e com o acabamento
+let atual = null;    // foto em edição: {img (canvas da foto), cantos: [[x,y]×4] na foto, filtro}
+const tela = F.$('#tela'), g = tela.getContext('2d');
+const MAX_FOTO = 2400, LARG_SAIDA = 1700;
+
+// ---------- foto → canvas (reduzida) ----------
+async function abrirFoto(file) {
+  const bmp = await createImageBitmap(file);
+  const k = Math.min(1, MAX_FOTO / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas');
+  c.width = Math.round(bmp.width * k); c.height = Math.round(bmp.height * k);
+  c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+  bmp.close?.();
+  return c;
+}
+const fila = [];
+async function adicionar(files) {
+  for (const f of files) { if (f.type.startsWith('image/')) fila.push(f); else F.toast(`“${f.name}” não é imagem.`, true); }
+  if (!atual) proxima();
+}
+async function proxima() {
+  const f = fila.shift();
+  if (!f) { atual = null; F.$('#editor').classList.add('hide'); F.$('#drop').classList.remove('hide'); return; }
+  try {
+    const img = await abrirFoto(f), W = img.width, H = img.height, m = 0.06;
+    atual = { img, cantos: [[W * m, H * m], [W * (1 - m), H * m], [W * (1 - m), H * (1 - m)], [W * m, H * (1 - m)]], filtro: atual?.filtro || 'doc' };
+    F.$('#ed-tit').textContent = `Ajuste os cantos · página ${paginas.length + 1}` + (fila.length ? ` (mais ${fila.length} na fila)` : '');
+    F.$('#editor').classList.remove('hide'); F.$('#drop').classList.add('hide');
+    desenharEditor();
+    F.$('#editor').scrollIntoView({ behavior: 'smooth' });
+  } catch (e) { F.toast('Não consegui abrir a foto.', true); proxima(); }
+}
+F.entrada(F.$('#drop'), F.$('#arq'), adicionar);
+F.$('#foto').addEventListener('change', (e) => { const fs = [...e.target.files]; e.target.value = ''; adicionar(fs); });
+
+// ---------- editor dos cantos ----------
+function desenharEditor() {
+  const { img, cantos } = atual;
+  tela.width = img.width; tela.height = img.height;
+  g.drawImage(img, 0, 0);
+  const r = Math.max(14, img.width / 45);
+  g.save();
+  g.fillStyle = 'rgba(0,0,0,.35)';
+  g.beginPath(); g.rect(0, 0, img.width, img.height); g.moveTo(...cantos[0]); cantos.slice(1).forEach((p) => g.lineTo(...p)); g.closePath(); g.fill('evenodd');
+  g.strokeStyle = '#2ee'; g.lineWidth = r / 4;
+  g.beginPath(); g.moveTo(...cantos[0]); cantos.slice(1).forEach((p) => g.lineTo(...p)); g.closePath(); g.stroke();
+  for (const p of cantos) { g.beginPath(); g.arc(p[0], p[1], r, 0, 2 * Math.PI); g.fillStyle = 'rgba(34,238,238,.35)'; g.fill(); g.lineWidth = r / 5; g.stroke(); }
+  g.restore();
+}
+let arrasto = -1;
+const ptTela = (e) => { const b = tela.getBoundingClientRect(); return [(e.clientX - b.left) * tela.width / b.width, (e.clientY - b.top) * tela.height / b.height]; };
+tela.addEventListener('pointerdown', (e) => {
+  if (!atual) return;
+  const p = ptTela(e), d = atual.cantos.map((c) => Math.hypot(c[0] - p[0], c[1] - p[1])), k = d.indexOf(Math.min(...d));
+  // toque perto de um canto (40 px na tela) pega o canto
+  if (d[k] * tela.getBoundingClientRect().width / tela.width < 48) { arrasto = k; tela.setPointerCapture(e.pointerId); }
+});
+tela.addEventListener('pointermove', (e) => {
+  if (arrasto < 0) return;
+  const [x, y] = ptTela(e);
+  atual.cantos[arrasto] = [Math.max(0, Math.min(tela.width, x)), Math.max(0, Math.min(tela.height, y))];
+  desenharEditor();
+});
+['pointerup', 'pointercancel'].forEach((ev) => tela.addEventListener(ev, () => (arrasto = -1)));
+document.querySelectorAll('[data-f]').forEach((b) => b.addEventListener('click', () => {
+  atual.filtro = b.dataset.f;
+  document.querySelectorAll('[data-f]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+}));
+F.$('#girar').addEventListener('click', () => {
+  // gira a foto 90° (sentido horário) e os cantos junto
+  const { img } = atual, c = document.createElement('canvas');
+  c.width = img.height; c.height = img.width;
+  const cg = c.getContext('2d'); cg.translate(c.width, 0); cg.rotate(Math.PI / 2); cg.drawImage(img, 0, 0);
+  atual.cantos = atual.cantos.map(([x, y]) => [img.height - y, x]);
+  atual.cantos = [atual.cantos[3], atual.cantos[0], atual.cantos[1], atual.cantos[2]];
+  atual.img = c; desenharEditor();
+});
+F.$('#descartar').addEventListener('click', proxima);
+
+// ---------- endireitar (homografia) ----------
+// resolve o sistema 8×8 da transformação que leva o retângulo de saída (0..W, 0..H) aos 4 cantos da foto
+function homografia(W, H, q) {
+  const src = [[0, 0], [W, 0], [W, H], [0, H]], A = [], b = [];
+  for (let i = 0; i < 4; i++) {
+    const [x, y] = src[i], [u, v] = q[i];
+    A.push([x, y, 1, 0, 0, 0, -u * x, -u * y]); b.push(u);
+    A.push([0, 0, 0, x, y, 1, -v * x, -v * y]); b.push(v);
+  }
+  for (let c = 0; c < 8; c++) { // eliminação de Gauss com pivô
+    let p = c; for (let r = c + 1; r < 8; r++) if (Math.abs(A[r][c]) > Math.abs(A[p][c])) p = r;
+    [A[c], A[p]] = [A[p], A[c]]; [b[c], b[p]] = [b[p], b[c]];
+    for (let r = 0; r < 8; r++) { if (r === c) continue; const f = A[r][c] / A[c][c]; for (let k = c; k < 8; k++) A[r][k] -= f * A[c][k]; b[r] -= f * b[c]; }
+  }
+  return b.map((x, i) => x / A[i][i]);
+}
+function endireitar(img, q) {
+  const d = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  const lw = (d(q[0], q[1]) + d(q[3], q[2])) / 2, lh = (d(q[0], q[3]) + d(q[1], q[2])) / 2;
+  const W = Math.round(Math.min(LARG_SAIDA, Math.max(lw, 400))), H = Math.round(W * lh / lw);
+  const h = homografia(W, H, q), si = img.getContext('2d').getImageData(0, 0, img.width, img.height), s = si.data, SW = img.width, SH = img.height;
+  const out = new ImageData(W, H), o = out.data;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const w = h[6] * x + h[7] * y + 1, u = (h[0] * x + h[1] * y + h[2]) / w, v = (h[3] * x + h[4] * y + h[5]) / w;
+    const x0 = Math.max(0, Math.min(SW - 2, Math.floor(u))), y0 = Math.max(0, Math.min(SH - 2, Math.floor(v))), fx = Math.min(1, Math.max(0, u - x0)), fy = Math.min(1, Math.max(0, v - y0));
+    const i = (y0 * SW + x0) * 4, j = (y * W + x) * 4;
+    for (let c = 0; c < 3; c++) { // bilinear
+      const a = s[i + c] + (s[i + 4 + c] - s[i + c]) * fx, bb = s[i + SW * 4 + c] + (s[i + SW * 4 + 4 + c] - s[i + SW * 4 + c]) * fx;
+      o[j + c] = a + (bb - a) * fy;
+    }
+    o[j + 3] = 255;
+  }
+  const c = document.createElement('canvas'); c.width = W; c.height = H; c.getContext('2d').putImageData(out, 0, 0);
+  return c;
+}
+// acabamento: documento = divide pelo fundo borrado (tira sombra) e aumenta o contraste; cinza; colorido = só clareia
+function acabamento(c, filtro) {
+  if (filtro === 'cor') return c;
+  const W = c.width, H = c.height, ctx = c.getContext('2d'), im = ctx.getImageData(0, 0, W, H), p = im.data;
+  let fundo = null;
+  if (filtro === 'doc') {
+    const k = 24, f = document.createElement('canvas'); f.width = Math.max(1, Math.round(W / k)); f.height = Math.max(1, Math.round(H / k));
+    const fg = f.getContext('2d'); fg.filter = 'blur(2px)'; fg.drawImage(c, 0, 0, f.width, f.height);
+    const b = document.createElement('canvas'); b.width = W; b.height = H; const bg = b.getContext('2d'); bg.imageSmoothingQuality = 'high'; bg.drawImage(f, 0, 0, W, H);
+    fundo = bg.getImageData(0, 0, W, H).data;
+  }
+  for (let i = 0; i < p.length; i += 4) {
+    let v = 0.299 * p[i] + 0.587 * p[i + 1] + 0.114 * p[i + 2];
+    if (fundo) {
+      const bv = Math.max(40, 0.299 * fundo[i] + 0.587 * fundo[i + 1] + 0.114 * fundo[i + 2]);
+      v = Math.min(255, v / bv * 255);
+      v = v > 215 ? 255 : Math.max(0, (v - 70) * 255 / 145); // fundo branco, texto escuro
+    }
+    p[i] = p[i + 1] = p[i + 2] = v;
+  }
+  ctx.putImageData(im, 0, 0);
+  return c;
+}
+F.$('#ok').addEventListener('click', () => F.trabalhando(F.$('#ok'), async (msg) => {
+  msg('Endireitando…'); await new Promise((r) => setTimeout(r, 30));
+  paginas.push({ canvas: acabamento(endireitar(atual.img, atual.cantos), atual.filtro) });
+  desenharLista(); proxima();
+}));
+
+// ---------- páginas ----------
+function desenharLista() {
+  F.$('#lista').replaceChildren(...paginas.map((p, k) => {
+    const li = document.createElement('li'); li.className = 'item';
+    const mini = document.createElement('canvas'); const s = 104 / Math.max(p.canvas.width, p.canvas.height);
+    mini.width = Math.round(p.canvas.width * s); mini.height = Math.round(p.canvas.height * s); mini.getContext('2d').drawImage(p.canvas, 0, 0, mini.width, mini.height);
+    li.append(mini);
+    const nm = document.createElement('div'); nm.className = 'nm'; nm.innerHTML = `<b>Página ${k + 1}</b><small>${p.canvas.width} × ${p.canvas.height} px</small>`; li.append(nm);
+    const bt = (t, rot, fn, off) => { const b = document.createElement('button'); b.type = 'button'; b.className = 'mini'; b.textContent = t; b.setAttribute('aria-label', rot); b.disabled = !!off; b.onclick = fn; li.append(b); };
+    bt('↑', 'Subir a página', () => { [paginas[k - 1], paginas[k]] = [paginas[k], paginas[k - 1]]; desenharLista(); }, k === 0);
+    bt('✕', 'Tirar a página', () => { paginas.splice(k, 1); desenharLista(); });
+    return li;
+  }));
+  F.$('#opcoes').classList.toggle('hide', !paginas.length);
+  F.$('#gerar').disabled = F.$('#jpg').disabled = !paginas.length;
+  if (!atual) F.$('#drop').classList.remove('hide');
+}
+const nomeArq = () => (F.$('#nome').value.trim() || `Documento_${new Date().toISOString().slice(0, 10)}`).replace(/[\\/:*?"<>|]+/g, '_');
+// OCR (Tesseract.js, português): carrega só quando pedido; os arquivos ficam no cache do aparelho
+let leitorOcr = null;
+async function ocr(canvas, msg) {
+  if (!leitorOcr) {
+    msg('Baixando o leitor de texto…');
+    if (!window.Tesseract) await new Promise((ok, erro) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js'; s.onload = ok; s.onerror = () => erro(new Error('Sem internet para baixar o leitor de texto.')); document.head.append(s); });
+    leitorOcr = await Tesseract.createWorker('por');
+  }
+  const { data } = await leitorOcr.recognize(canvas, {}, { blocks: true });
+  return (data.blocks || []).flatMap((b) => b.paragraphs.flatMap((p) => p.lines.flatMap((l) => l.words))).filter((w) => w.text.trim() && w.confidence > 30);
+}
+F.$('#gerar').addEventListener('click', () => F.trabalhando(F.$('#gerar'), async (msg) => {
+  if (!F.libs('PDFLib')) return;
+  const doc = await PDFLib.PDFDocument.create(), A4 = [595.28, 841.89], mg = 18, comOcr = F.$('#ocr').checked;
+  const fonte = comOcr ? await doc.embedFont(PDFLib.StandardFonts.Helvetica) : null;
+  // a fonte padrão do PDF só tem os caracteres do Windows-1252: o resto vira "?"
+  const seguro = (t) => [...t].map((ch) => { try { fonte.encodeText(ch); return ch; } catch (e) { return '?'; } }).join('');
+  for (const [k, p] of paginas.entries()) {
+    msg(`Página ${k + 1} de ${paginas.length}…`);
+    const jpg = await doc.embedJpg(await (await F.jpeg(p.canvas, 0.82)).arrayBuffer());
+    const deitada = p.canvas.width > p.canvas.height, [PW, PH] = deitada ? [A4[1], A4[0]] : A4;
+    const s = Math.min((PW - 2 * mg) / jpg.width, (PH - 2 * mg) / jpg.height), w = jpg.width * s, h = jpg.height * s, x0 = (PW - w) / 2, y0 = (PH - h) / 2;
+    const pg = doc.addPage([PW, PH]); pg.drawImage(jpg, { x: x0, y: y0, width: w, height: h });
+    if (comOcr) {
+      const palavras = await ocr(p.canvas, msg); msg(`Lendo o texto da página ${k + 1}…`);
+      // texto invisível por cima de cada palavra: a busca e a seleção caem no lugar certo
+      for (const pw of palavras) {
+        const b = pw.bbox, alt = (b.y1 - b.y0) * s, larg = (b.x1 - b.x0) * s, txt = seguro(pw.text.trim()); if (alt <= 0) continue;
+        const size = Math.max(2, alt * 0.9), wt = fonte.widthOfTextAtSize(txt, size) || 1;
+        pg.drawText(txt, { x: x0 + b.x0 * s, y: y0 + h - b.y1 * s + alt * 0.15, size: Math.min(size, size * larg / wt * 1.05), font: fonte, opacity: 0 });
+      }
+    }
+  }
+  F.baixar(new Blob([await doc.save()], { type: 'application/pdf' }), nomeArq() + '.pdf');
+  F.toast(comOcr ? 'PDF pronto, com texto pesquisável.' : 'PDF pronto.');
+}));
+F.$('#jpg').addEventListener('click', () => F.trabalhando(F.$('#jpg'), async () => {
+  for (const [k, p] of paginas.entries()) F.baixar(await F.jpeg(p.canvas, 0.85), `${nomeArq()}${paginas.length > 1 ? '_p' + (k + 1) : ''}.jpg`);
+}));
+</script>
+</body>
+</html>

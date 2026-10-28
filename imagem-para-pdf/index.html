@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Imagem para PDF</title>
+<meta name="description" content="Transforme fotos e imagens num PDF, direto no aparelho.">
+<meta name="theme-color" content="#d93025">
+<link rel="manifest" href="../manifest.webmanifest">
+<link rel="icon" href="../icon-192.png">
+<link rel="stylesheet" href="../comum/base.css">
+</head>
+<body>
+<header class="topo"><div class="in"><a class="voltar" href="../?g=pdf">‹ PDF</a><h1>Imagem para PDF</h1></div></header>
+<main class="wrap">
+  <p class="sub">Fotos de RDO, notas, romaneios… viram um PDF só, uma imagem por página. Nada é enviado a servidor.</p>
+  <div class="drop" id="drop">
+    <p>Arraste imagens para cá ou</p>
+    <div class="row">
+      <label class="btn pri" for="arq">Escolher imagens</label>
+      <label class="btn" for="foto">Tirar foto</label>
+    </div>
+    <input class="sr" id="arq" type="file" accept="image/*" multiple>
+    <input class="sr" id="foto" type="file" accept="image/*" capture="environment">
+  </div>
+  <ol class="lista" id="lista" aria-label="Imagens, na ordem das páginas"></ol>
+  <section class="card hide" id="opcoes">
+    <h2>Página</h2>
+    <div class="row">
+      <label class="campo" style="flex:1">Tamanho
+        <select id="papel"><option value="a4">A4 (deitada ou em pé, conforme a foto)</option><option value="img">Do tamanho da imagem</option></select>
+      </label>
+      <label class="campo" style="flex:1">Margem
+        <select id="margem"><option value="0">Sem margem</option><option value="20" selected>Pequena</option><option value="40">Grande</option></select>
+      </label>
+      <label class="campo" style="flex:1">Qualidade
+        <select id="qual"><option value="1600|0.72">Menor arquivo (WhatsApp)</option><option value="2200|0.82" selected>Boa</option><option value="3200|0.9">Máxima</option></select>
+      </label>
+    </div>
+  </section>
+</main>
+<div class="acao"><div class="in"><button class="pri" id="gerar" type="button" disabled>Gerar PDF</button></div></div>
+<div id="status" role="status" aria-live="polite"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf-lib/1.17.1/pdf-lib.min.js" crossorigin="anonymous"></script>
+<script src="../comum/base.js"></script>
+<script>
+'use strict';
+const lista = []; // {file, url}
+
+function adicionar(files) {
+  for (const f of files) {
+    if (!f.type.startsWith('image/')) { F.toast(`“${f.name}” não é imagem.`, true); continue; }
+    if (f.size > 40 * 1024 * 1024) { F.toast(`“${f.name}” passa de 40 MB.`, true); continue; }
+    lista.push({ file: f, url: URL.createObjectURL(f) });
+  }
+  desenhar();
+}
+F.entrada(F.$('#drop'), F.$('#arq'), adicionar);
+F.$('#foto').addEventListener('change', (e) => { const fs = [...e.target.files]; e.target.value = ''; adicionar(fs); });
+
+function mover(i, d) {
+  const j = i + d;
+  if (j < 0 || j >= lista.length) return;
+  [lista[i], lista[j]] = [lista[j], lista[i]];
+  desenhar();
+  F.$(`#lista li:nth-child(${j + 1}) [data-d="${d}"]`)?.focus();
+}
+function desenhar() {
+  F.$('#lista').replaceChildren(...lista.map((it, i) => {
+    const li = document.createElement('li');
+    li.className = 'item';
+    li.innerHTML = `<img alt=""><span class="nm"><b></b><small></small></span>
+      <button class="mini" type="button" data-d="-1" aria-label="Subir">↑</button>
+      <button class="mini" type="button" data-d="1" aria-label="Descer">↓</button>
+      <button class="mini" type="button" data-x aria-label="Tirar da lista">✕</button>`;
+    li.querySelector('img').src = it.url;
+    li.querySelector('b').textContent = `Página ${i + 1}`;
+    li.querySelector('small').textContent = `${it.file.name} · ${F.tamanho(it.file.size)}`;
+    li.querySelector('[data-d="-1"]').onclick = () => mover(i, -1);
+    li.querySelector('[data-d="1"]').onclick = () => mover(i, 1);
+    li.querySelector('[data-x]').onclick = () => { URL.revokeObjectURL(it.url); lista.splice(i, 1); desenhar(); };
+    return li;
+  }));
+  F.$('#opcoes').classList.toggle('hide', !lista.length);
+  F.$('#gerar').disabled = !lista.length;
+  F.$('#gerar').textContent = lista.length ? `Gerar PDF (${lista.length} página${lista.length > 1 ? 's' : ''})` : 'Gerar PDF';
+}
+
+// lê a imagem já na posição certa (o navegador aplica a rotação da câmera) e reduz para o tamanho escolhido, em JPEG
+function carregar(url) {
+  return new Promise((ok, erro) => { const im = new Image(); im.onload = () => ok(im); im.onerror = () => erro(new Error('imagem inválida')); im.src = url; });
+}
+async function paraJpeg(it, maxLado, q) {
+  const im = await carregar(it.url);
+  const k = Math.min(1, maxLado / Math.max(im.naturalWidth, im.naturalHeight));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(im.naturalWidth * k));
+  c.height = Math.max(1, Math.round(im.naturalHeight * k));
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = '#fff'; // PNG transparente fica com fundo branco
+  ctx.fillRect(0, 0, c.width, c.height);
+  ctx.drawImage(im, 0, 0, c.width, c.height);
+  return { bytes: new Uint8Array(await (await F.jpeg(c, q)).arrayBuffer()), w: c.width, h: c.height };
+}
+
+F.$('#gerar').addEventListener('click', (e) => F.trabalhando(e.currentTarget, async (msg) => {
+  if (!F.libs('PDFLib')) return;
+  const [maxLado, q] = F.$('#qual').value.split('|').map(Number);
+  const m = +F.$('#margem').value, a4 = F.$('#papel').value === 'a4';
+  const doc = await PDFLib.PDFDocument.create();
+  for (let i = 0; i < lista.length; i++) {
+    msg(`Página ${i + 1} de ${lista.length}…`);
+    let img;
+    try { img = await paraJpeg(lista[i], maxLado, q); } catch (err) { throw new Error(`Não consegui ler “${lista[i].file.name}”.`); }
+    const jpg = await doc.embedJpg(img.bytes);
+    // página A4 na mesma orientação da foto; ou do tamanho da foto (lado maior com ~28 cm)
+    let W, H;
+    if (a4) [W, H] = img.w > img.h ? [842, 595] : [595, 842];
+    else { const k = 800 / Math.max(img.w, img.h); W = img.w * k + 2 * m; H = img.h * k + 2 * m; }
+    const k = Math.min((W - 2 * m) / img.w, (H - 2 * m) / img.h);
+    const w = img.w * k, h = img.h * k;
+    doc.addPage([W, H]).drawImage(jpg, { x: (W - w) / 2, y: (H - h) / 2, width: w, height: h });
+  }
+  const bytes = await doc.save();
+  F.baixar(new Blob([bytes], { type: 'application/pdf' }), F.nomeBase(lista[0].file.name) + '.pdf');
+  F.toast(`PDF pronto: ${lista.length} página(s), ${F.tamanho(bytes.length)}.`);
+}));
+</script>
+</body>
+</html>

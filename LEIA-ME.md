@@ -16,9 +16,9 @@ Cada ferramenta é uma pasta com `index.html`; `comum/` tem o código compartilh
 - IndexedDB `sinapi`: a tabela importada na Consulta SINAPI; o Wigo lê a mesma base nos boletins de medição.
 
 ## Licenças
-O leitor de DWG usa a  (GPL-3.0). Antes de vender as Ferramentas ou o Wigo como produto fechado,
-veja  na pasta do Wigo (OneDrive).
+O leitor de DWG usa a `@mlightcad/libredwg-web` (GPL-3.0). Antes de vender as Ferramentas ou o Wigo como produto fechado,
+veja `documentos/LICENCAS_E_VENDA.md` na pasta do Wigo (OneDrive).
 
 ## SINAPI Analítico
 A Consulta SINAPI aceita também a planilha Analítico da Caixa (composições com os coeficientes). Cada base guarda, por composição,
-as horas de mão de obra por unidade (), lidas pelo Wigo no cronograma e nos Insights.
+as horas de mão de obra por unidade (`coef[código].mo`), lidas pelo Wigo no cronograma e nos Insights.

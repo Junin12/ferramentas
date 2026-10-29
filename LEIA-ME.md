@@ -14,3 +14,11 @@ Cada ferramenta é uma pasta com `index.html`; `comum/` tem o código compartilh
   `medir-pdf/?doc=wigo`) e `/ferr-wigo/saida/<id>` (arquivos para as Fotos da obra do Wigo).
 - `localStorage` `ferr-arquivo-fila`: registros da Calculadora de obra para o Arquivo da obra.
 - IndexedDB `sinapi`: a tabela importada na Consulta SINAPI; o Wigo lê a mesma base nos boletins de medição.
+
+## Licenças
+O leitor de DWG usa a  (GPL-3.0). Antes de vender as Ferramentas ou o Wigo como produto fechado,
+veja  na pasta do Wigo (OneDrive).
+
+## SINAPI Analítico
+A Consulta SINAPI aceita também a planilha Analítico da Caixa (composições com os coeficientes). Cada base guarda, por composição,
+as horas de mão de obra por unidade (), lidas pelo Wigo no cronograma e nos Insights.

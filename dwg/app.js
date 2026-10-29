@@ -20,6 +20,8 @@ const alvo = new URLSearchParams(location.search).get('exportar'); // aberto pel
 // ---------- abrir ----------
 let leitor = null;
 F.entrada(F.$('#drop'), F.$('#arq'), ([f]) => abrir(f));
+// planta DWG/DXF mandada pelo Wigo (projetos da pasta do Drive)
+if (new URLSearchParams(location.search).get('doc') === 'wigo') F.doWigo('dwg').then((f) => { if (f) abrir(f); }).catch(() => {});
 
 async function abrir(f) {
   if (!/\.(dwg|dxf)$/i.test(f.name)) { F.toast(`“${f.name}” não é DWG nem DXF.`, true); return; }
@@ -89,7 +91,7 @@ function mostrar(r, fs, nome) {
   ajustar();
   if (d.cortado) F.toast('Desenho muito grande: parte dele ficou de fora.', true);
   // veio para gerar PDF/imagem e o arquivo tem folhas de impressão: já abre a primeira (o mais comum é imprimir a prancha)
-  if (alvo && folhas.length && ['pdf', 'png', 'jpg', 'svg'].includes(alvo)) { sel.value = '0'; sel.dispatchEvent(new Event('change')); }
+  if (alvo && folhas.length && ['pdf', 'png', 'jpg', 'svg', 'html'].includes(alvo)) { sel.value = '0'; sel.dispatchEvent(new Event('change')); }
   if (alvo && typeof abrirExportar === 'function') abrirExportar(alvo);
 }
 

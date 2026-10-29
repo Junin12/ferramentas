@@ -33,7 +33,7 @@
       <input class="sr" id="arq" type="file" accept=".xlsx,.xls,.csv" multiple>
     </div>
     <label class="campo hide" id="c-uf">Estado (a planilha tem colunas de vários estados)<select id="uf"></select></label>
-    <p class="info">Em caixa.gov.br › SINAPI › Downloads: escolha o mês e o estado (MG) e baixe “Composições” e “Insumos”. Use desonerado ou não desonerado conforme o contrato.</p>
+    <p class="info">Em caixa.gov.br › SINAPI › Downloads: escolha o mês e o estado (MG) e baixe “Composições” e “Insumos”. Use desonerado ou não desonerado conforme o contrato. Importe também a <b>Analítico</b> (composições com os coeficientes): o Wigo usa as horas de mão de obra para o cronograma e a produtividade de referência.</p>
   </section>
   <section class="card hide" id="sec-busca">
     <label class="campo">Pesquisar (palavras ou código)<input id="q" type="search" placeholder="Ex.: tubo pvc 100, escavação mecanizada, 92873" autocomplete="off"></label>
@@ -103,6 +103,38 @@ function numero(v) {
   const s = String(v ?? '').trim(); if (!s) return null;
   const n = parseFloat(/,/.test(s) ? s.replace(/\./g, '').replace(',', '.') : s); return Number.isFinite(n) ? n : null;
 }
+// SINAPI Analítico (composições com os itens e coeficientes): guarda, por composição, as horas de mão de obra por unidade
+// (itens em H, ex.: "ARMADOR COM ENCARGOS COMPLEMENTARES" 0,0396 h/kg). O Wigo usa para a produtividade de referência e o cronograma.
+// Formato da Caixa (e variações): CÓDIGO DA COMPOSIÇÃO, DESCRIÇÃO DA COMPOSIÇÃO, UNIDADE, CUSTO TOTAL, TIPO ITEM, CÓDIGO ITEM,
+// DESCRIÇÃO ITEM, UNIDADE ITEM, COEFICIENTE. Linhas de item sem o código da composição herdam o da linha de cima.
+function lerAnalitico(wb) {
+  const coef = {}; let achou = false;
+  for (const nome of wb.SheetNames) {
+    const L = XLSX.utils.sheet_to_json(wb.Sheets[nome], { header: 1, raw: true, defval: '' });
+    const hi = L.slice(0, 40).findIndex((l) => { const t = l.map(norm); return t.some((c) => /COEFICIENTE/.test(c)) && t.some((c) => /COMPOSICAO/.test(c)); });
+    if (hi < 0) continue;
+    const cab = L[hi].map(norm), col = (re, desde = 0) => cab.findIndex((c, i) => i >= desde && re.test(c));
+    const cComp = col(/^(CODIGO( DA)? COMPOSICAO|COMPOSICAO|COD\.? COMPOSICAO)$/) >= 0 ? col(/^(CODIGO( DA)? COMPOSICAO|COMPOSICAO|COD\.? COMPOSICAO)$/) : col(/CODIGO/);
+    const cDescC = col(/DESCRICAO( DA)? COMPOSICAO/), cUnC = col(/^(UNIDADE|UND|UN)$/), cCusto = col(/CUSTO TOTAL|CUSTO/);
+    const cDescI = col(/DESCRICAO( DO)? ITEM|^DESCRICAO$/), cUnI = col(/UNIDADE( DO)? ITEM|UND ITEM/), cCoef = col(/COEFICIENTE/);
+    if (cComp < 0 || cDescI < 0 || cUnI < 0 || cCoef < 0) continue;
+    achou = true; let atual = null;
+    for (const l of L.slice(hi + 1)) {
+      const cod = String(l[cComp] ?? '').trim().replace(/\.0$/, '');
+      if (/^\d{3,}$/.test(cod)) {
+        atual = coef[cod] ||= { d: String(l[cDescC] ?? '').trim(), u: cUnC >= 0 ? String(l[cUnC] ?? '').trim() : '', p: cCusto >= 0 ? numero(l[cCusto]) : null, mo: {} };
+        if (!atual.d && cDescC >= 0) atual.d = String(l[cDescC] ?? '').trim();
+      }
+      if (!atual) continue;
+      // mão de obra: profissionais em horas "COM ENCARGOS COMPLEMENTARES" (ferramentas, EPI e cursos também vêm em H, mas não são gente)
+      const desc = String(l[cDescI] ?? '').trim();
+      if (norm(l[cUnI]) !== 'H' || !/\bCOM ENCARGOS COMPLEMENTARES\b/i.test(desc)) continue;
+      const prof = desc.replace(/\s+COM ENCARGOS.*$/i, '').trim(), v = numero(l[cCoef]);
+      if (prof && v > 0) atual.mo[prof] = Math.round(((atual.mo[prof] || 0) + v) * 1e7) / 1e7;
+    }
+  }
+  return achou ? coef : null;
+}
 // mês e estado pelo nome do arquivo da Caixa (ex.: SINAPI_Custo_Ref_Composicoes_Sintetico_MG_202609_NaoDesonerado.xlsx)
 function infoArq(n) {
   const m = n.match(/(20\d{2})[_\-.]?(0[1-9]|1[0-2])(?!\d)/), uf = (n.toUpperCase().match(/[_\- ]([A-Z]{2})[_\- ]/) || [])[1];
@@ -114,6 +146,14 @@ F.entrada(F.$('#drop'), F.$('#arq'), (fs) => F.trabalhando(F.$('#drop').querySel
     F.toast(`Lendo ${f.name}…`);
     try {
       const wb = XLSX.read(await f.arrayBuffer(), { type: 'array', dense: true });
+      // Analítico: as composições (com o custo) e as horas de mão de obra de cada uma
+      const coef = lerAnalitico(wb);
+      if (coef && Object.keys(coef).length) {
+        const L = Object.entries(coef).map(([c, x]) => ({ c, d: x.d, u: x.u, t: 'Composição', ...(x.p != null ? { p: x.p } : {}) })).filter((it) => it.d);
+        const nMo = Object.values(coef).filter((x) => Object.keys(x.mo).length).length;
+        const b = { id: `${Date.now()}`, arq: f.name, ...infoArq(f.name), ufs: [], n: L.length, itens: L, coef, nCoef: nMo };
+        await BD.put(b.id, b); F.toast(`${L.length.toLocaleString('pt-BR')} composições (${nMo.toLocaleString('pt-BR')} com mão de obra) importadas de ${f.name}.`); continue;
+      }
       const { itens: L, ufs } = lerPlanilha(wb, f.name);
       if (!L.length) { F.toast(`Não achei códigos e preços em “${f.name}”. É a planilha de preços da SINAPI?`, true); continue; }
       const b = { id: `${Date.now()}`, arq: f.name, ...infoArq(f.name), ufs, n: L.length, itens: L };
@@ -129,7 +169,7 @@ async function carregar() {
   if (ufs.length) { const atual = localStorage.getItem('sinapi-uf') || 'MG'; F.$('#uf').replaceChildren(...ufs.map((u) => { const o = document.createElement('option'); o.value = o.textContent = u; o.selected = u === atual; return o; })); }
   itens = bases.flatMap((b) => b.itens.map((it) => ({ ...it, b })));
   F.$('#bases').replaceChildren(...bases.map((b) => { const s = document.createElement('span'); s.className = 'chip';
-    s.textContent = `${b.itens[0]?.t === 'Insumo' ? 'Insumos' : 'Composições'} ${[b.uf, b.mes, b.des].filter(Boolean).join(' · ')} · ${b.n.toLocaleString('pt-BR')} itens `;
+    s.textContent = `${b.coef ? 'Analítico' : b.itens[0]?.t === 'Insumo' ? 'Insumos' : 'Composições'} ${[b.uf, b.mes, b.des].filter(Boolean).join(' · ')} · ${b.n.toLocaleString('pt-BR')} itens `;
     const x = document.createElement('button'); x.type = 'button'; x.className = 'mini'; x.textContent = '✕'; x.setAttribute('aria-label', 'Apagar esta base'); x.onclick = async () => { if (confirm(`Apagar a base ${b.arq} deste aparelho?`)) { await BD.del(b.id); carregar(); } };
     s.append(x); return s; }));
   F.$('#sec-busca').classList.toggle('hide', !itens.length);

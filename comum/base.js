@@ -110,11 +110,11 @@ const F = (() => {
   // As chaves começam na raiz do site: uma chave relativa viraria outro endereço em cada página.
   const WIGO_CACHE = 'ferr-wigo';
   const noWigo = () => { try { return sessionStorage.getItem('ferr-de') === 'wigo' || new URLSearchParams(location.search).get('de') === 'wigo' || (window.parent !== window && typeof window.parent.wigoReceber === 'function'); } catch (e) { return false; } };
-  async function doWigo() {
+  async function doWigo(tipo = 'pdf') {
     if (!('caches' in window)) return null;
-    const c = await caches.open(WIGO_CACHE), r = await c.match('/ferr-wigo/entrada/pdf'); if (!r) return null;
-    const b = await r.blob(); await c.delete('/ferr-wigo/entrada/pdf');
-    return new File([b], decodeURIComponent(r.headers.get('X-Nome') || 'projeto.pdf'), { type: b.type || 'application/pdf' });
+    const k = '/ferr-wigo/entrada/' + tipo, c = await caches.open(WIGO_CACHE), r = await c.match(k); if (!r) return null;
+    const b = await r.blob(); await c.delete(k);
+    return new File([b], decodeURIComponent(r.headers.get('X-Nome') || 'projeto.' + tipo), { type: b.type || (tipo === 'pdf' ? 'application/pdf' : 'application/octet-stream') });
   }
   // arquivos: [{ nome, blob }] (JPG/PNG ou PDF). Devolve quantos foram entregues ao Wigo.
   async function paraWigo(arquivos, legenda) {

@@ -23,13 +23,14 @@ const FORMATOS = {
   png: { nome: 'Imagem PNG', desc: 'Imagem nítida, boa para RDO e mensagens.' },
   jpg: { nome: 'Imagem JPG', desc: 'Imagem mais leve.' },
   svg: { nome: 'SVG', desc: 'Vetorial para sites e apresentações.' },
+  html: { nome: 'HTML (abre em qualquer celular)', desc: 'Um arquivo só, com o desenho vetorial: abre no navegador sem instalar nada, com zoom, arrastar e liga/desliga de camadas. Bom para mandar à fiscalização pelo WhatsApp.' },
   dxf: { nome: 'DXF', desc: 'Para abrir em programas gratuitos (LibreCAD, QCAD) ou AutoCAD antigo. Vai o espaço do modelo: linhas, arcos, círculos, textos e blocos. Hachuras, tipos de linha e folhas de impressão não vão.' },
   xlsx: { nome: 'Excel (quantitativos)', desc: 'Contagem de blocos, atributos, comprimentos e áreas por camada e lista de textos.' },
   docx: { nome: 'Word (relatório)', desc: 'Imagem do desenho e tabelas de quantitativos, pronto para editar.' },
   kml: { nome: 'Google Earth (KML)', desc: 'Linhas e pontos do desenho georreferenciado (UTM) em latitude e longitude.' },
   csv: { nome: 'Coordenadas (CSV)', desc: 'Vértices das linhas com E, N, latitude e longitude, para Excel.' },
 };
-const TITULOS = { pdf: 'DWG para PDF', png: 'DWG para imagem', jpg: 'DWG para imagem', svg: 'DWG para SVG', dxf: 'DWG para DXF',
+const TITULOS = { pdf: 'DWG para PDF', png: 'DWG para imagem', jpg: 'DWG para imagem', svg: 'DWG para SVG', html: 'DWG para HTML', dxf: 'DWG para DXF',
   xlsx: 'Quantitativos do DWG', docx: 'Relatório do DWG em Word', kml: 'DWG para Google Earth', csv: 'Coordenadas do DWG' };
 
 // ---------- painel ----------
@@ -62,12 +63,12 @@ function atualizarOpcoes() {
   const f = formato, emFolha = folha >= 0;
   const mostra = (sel, sim) => $e(sel).classList.toggle('hide', !sim);
   $e('#ex-desc').textContent = FORMATOS[f].desc;
-  const desenho = ['pdf', 'png', 'jpg', 'svg', 'docx'].includes(f);
+  const desenho = ['pdf', 'png', 'jpg', 'svg', 'html', 'docx'].includes(f);
   mostra('#op-oque', desenho);
   $e('#ex-oque option[value=folha]').disabled = !emFolha;
   if (emFolha && desenho) $e('#ex-oque').value = 'folha';
   else if ($e('#ex-oque').value === 'folha') $e('#ex-oque').value = 'todo';
-  const papel = (f === 'pdf' || f === 'svg') && $e('#ex-oque').value !== 'folha';
+  const papel = (f === 'pdf' || f === 'svg' || f === 'html') && $e('#ex-oque').value !== 'folha';
   mostra('#op-papel', papel);
   mostra('#op-escala', papel);
   mostra('#op-cores', desenho);
@@ -94,6 +95,7 @@ $e('#ex-ir').addEventListener('click', (e) => F.trabalhando(e.currentTarget, asy
   if (formato === 'pdf') { await passo('Gerando PDF…'); blob = await gerarPdf(op); }
   else if (formato === 'png' || formato === 'jpg') { await passo('Gerando imagem…'); blob = await gerarImagem(op, formato); }
   else if (formato === 'svg') { await passo('Gerando SVG…'); blob = gerarSvg(op); }
+  else if (formato === 'html') { await passo('Gerando HTML…'); blob = await gerarHtml(op); }
   else if (formato === 'dxf') {
     await passo('Gerando DXF…');
     const ocultas = op.soVisiveis ? d.camadas.filter((c, i) => !vis[i]).map((c) => c.nome) : [];
@@ -253,6 +255,40 @@ function pdfItem(out, it, op, K, Hmm, fonte) {
   out.push('Q');
 }
 
+// ---------- HTML único: o SVG (com a camada em data-c) e um visualizador pequeno, sem internet ----------
+async function gerarHtml(op) {
+  const svg = await gerarSvg({ ...op, camadas: true }).text();
+  const camadas = [...new Set([...svg.matchAll(/ data-c="([^"]*)"/g)].map((m) => m[1]))].sort((a, b) => a.localeCompare(b, 'pt-BR'));
+  const titulo = escXml(F.nomeBase(nomeArquivo || 'Desenho'));
+  const css = 'html,body{margin:0;height:100%;background:#eef0f3;font:14px system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#1d2330}' +
+    '#topo{position:fixed;top:0;left:0;right:0;z-index:2;display:flex;gap:8px;align-items:center;padding:8px 10px;background:#1F3A5F;color:#fff}' +
+    '#topo b{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#topo button{min-height:40px;border:0;border-radius:8px;padding:0 12px;font:inherit;background:#fff;color:#1F3A5F}' +
+    '#palco{position:fixed;inset:56px 0 0 0;overflow:hidden;touch-action:none;background:#fff}#palco svg{width:100%;height:100%}' +
+    '#cam{position:fixed;top:56px;right:0;bottom:0;z-index:3;width:min(320px,85vw);overflow:auto;background:#fff;box-shadow:-4px 0 16px rgba(0,0,0,.2);padding:10px}' +
+    '#cam[hidden]{display:none}#cam label{display:flex;gap:8px;align-items:center;min-height:36px;border-bottom:1px solid #eee}';
+  const js = `(function(){var s=document.querySelector('#palco svg'),v=s.getAttribute('viewBox').split(' ').map(Number),o=v.slice(),P=new Map(),ini=null;
+s.removeAttribute('width');s.removeAttribute('height');s.setAttribute('preserveAspectRatio','xMidYMid meet');
+function pr(){s.setAttribute('viewBox',v.join(' '))}function esc(){var r=s.getBoundingClientRect();return Math.max(v[2]/r.width,v[3]/r.height)}
+function zoom(k,cx,cy){var r=s.getBoundingClientRect(),e=esc(),x=v[0]+(cx-r.left-(r.width-v[2]/e)/2)*e,y=v[1]+(cy-r.top-(r.height-v[3]/e)/2)*e;v[0]=x-(x-v[0])/k;v[1]=y-(y-v[1])/k;v[2]/=k;v[3]/=k;pr()}
+s.addEventListener('wheel',function(e){e.preventDefault();zoom(Math.pow(1.0015,-e.deltaY),e.clientX,e.clientY)},{passive:false});
+s.addEventListener('pointerdown',function(e){s.setPointerCapture(e.pointerId);P.set(e.pointerId,[e.clientX,e.clientY]);ini=null});
+s.addEventListener('pointermove',function(e){if(!P.has(e.pointerId))return;var a=P.get(e.pointerId),n=[e.clientX,e.clientY];
+if(P.size===1){var k=esc();v[0]-=(n[0]-a[0])*k;v[1]-=(n[1]-a[1])*k;pr();P.set(e.pointerId,n)}
+else{P.set(e.pointerId,n);var q=Array.from(P.values()),d=Math.hypot(q[0][0]-q[1][0],q[0][1]-q[1][1]);if(ini)zoom(d/ini,(q[0][0]+q[1][0])/2,(q[0][1]+q[1][1])/2);ini=d}});
+function solta(e){P.delete(e.pointerId);ini=null}s.addEventListener('pointerup',solta);s.addEventListener('pointercancel',solta);
+s.addEventListener('dblclick',function(){v=o.slice();pr()});document.getElementById('tudo').onclick=function(){v=o.slice();pr()};
+var st=document.createElement('style');document.head.appendChild(st);document.getElementById('bc').onclick=function(){var c=document.getElementById('cam');c.hidden=!c.hidden};
+document.getElementById('cam').addEventListener('change',function(){var off=Array.from(document.querySelectorAll('#cam input')).filter(function(i){return !i.checked}).map(function(i){return '[data-c="'+i.value.replace(/"/g,'\\\\"')+'"]'});st.textContent=off.length?off.join(',')+'{display:none}':''})})();`;
+  // data-c guarda o número da camada; o nome vem da lista de camadas do desenho aberto
+  const nomeCam = (c) => escXml((typeof d !== 'undefined' && d && d.camadas && d.camadas[+c] ? d.camadas[+c].nome : c) || '(sem nome)');
+  camadas.sort((a, b) => nomeCam(a).localeCompare(nomeCam(b), 'pt-BR', { numeric: true }));
+  const lista = camadas.map((c) => `<label><input type="checkbox" checked value="${c}"> ${nomeCam(c)}</label>`).join('');
+  const html = `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>${titulo}</title><style>${css}</style></head>` +
+    `<body><div id="topo"><b>${titulo}</b><button id="tudo" type="button">Ver tudo</button>${camadas.length > 1 ? '<button id="bc" type="button">Camadas</button>' : '<span id="bc"></span>'}</div>` +
+    `<div id="palco">${svg}</div><div id="cam" hidden>${lista}</div><script>${js}<\/script></body></html>`;
+  return new Blob([html], { type: 'text/html' });
+}
+
 // ---------- SVG ----------
 const escXml = (s) => String(s).replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c])).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '');
 
@@ -275,7 +311,8 @@ function gerarSvg(op) {
         for (let j = a + 1; j < b; j++) dd += 'L' + f(D.pts[2 * j]) + ' ' + f(D.pts[2 * j + 1]);
         if (D.tipo[i] & 1) dd += 'Z';
       }
-      out.push(g.tipo ? `<path fill="${hex(cor)}" fill-rule="evenodd" d="${dd}"/>` : `<path fill="none" stroke="${hex(cor)}" stroke-width="${+(op.lw / s).toFixed(casas + 2)}" d="${dd}"/>`);
+      const dc = op.camadas ? ` data-c="${escXml(g.cam)}"` : '';
+      out.push(g.tipo ? `<path${dc} fill="${hex(cor)}" fill-rule="evenodd" d="${dd}"/>` : `<path${dc} fill="none" stroke="${hex(cor)}" stroke-width="${+(op.lw / s).toFixed(casas + 2)}" d="${dd}"/>`);
     }
     out.push('</g>');
     const bl = ['alphabetic', 'text-after-edge', 'central', 'hanging'], anc = ['start', 'middle', 'end'];
@@ -286,7 +323,7 @@ function gerarSvg(op) {
       const X = t.x * s + it.tx, Y = -t.y * s + it.ty, linhas = t.t.split('\n'), passo = px * 1.66;
       const dy0 = linhas.length > 1 ? (t.av === 3 ? 0 : t.av === 2 ? -(linhas.length - 1) * passo / 2 : -(linhas.length - 1) * passo) : 0;
       const spans = linhas.map((ln, i) => `<tspan x="${X.toFixed(3)}" y="${(Y + dy0 + i * passo).toFixed(3)}">${escXml(ln)}</tspan>`).join('');
-      out.push(`<text font-family="Arial,Helvetica,sans-serif" font-size="${(px / 0.72).toFixed(3)}" fill="${op.pb ? '#000' : hex(impressa(t.cor))}" text-anchor="${anc[t.ah] || 'start'}" dominant-baseline="${bl[t.av] || 'alphabetic'}"${t.rot ? ` transform="rotate(${(-t.rot * 180 / Math.PI).toFixed(3)} ${X.toFixed(3)} ${Y.toFixed(3)})"` : ''}>${spans}</text>`);
+      out.push(`<text${op.camadas ? ` data-c="${escXml(t.c)}"` : ''} font-family="Arial,Helvetica,sans-serif" font-size="${(px / 0.72).toFixed(3)}" fill="${op.pb ? '#000' : hex(impressa(t.cor))}" text-anchor="${anc[t.ah] || 'start'}" dominant-baseline="${bl[t.av] || 'alphabetic'}"${t.rot ? ` transform="rotate(${(-t.rot * 180 / Math.PI).toFixed(3)} ${X.toFixed(3)} ${Y.toFixed(3)})"` : ''}>${spans}</text>`);
     }
     out.push('</g>');
   });

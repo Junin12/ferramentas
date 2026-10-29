@@ -96,7 +96,9 @@ const abrirArquivos = async (fs) => {
 };
 F.entrada(F.$('#drop'), F.$('#arq'), abrirArquivos);
 // prancha mandada pelo Wigo (botão 📏 Medir no projeto)
-if (new URLSearchParams(location.search).get('doc') === 'wigo') F.doWigo().then((f) => { if (f) abrirArquivos([f]); }).catch(() => {});
+{ const ps = new URLSearchParams(location.search);
+  if (ps.get('doc') === 'wigo') F.doWigo().then(async (f) => { if (!f) return; await abrirArquivos([f]); const n = +ps.get('folha');
+    if (n > 1 && st.doc && n <= st.doc.numPages) { F.$('#pag').value = n; await abrirFolha(n); } }).catch(() => {}); }
 async function abrirFolha(n) {
   st.n = n; st.page = await st.doc.getPage(n); st.atual = [];
   const vp = st.page.getViewport({ scale: 1 }); st.z = Math.max(0.3, (F.$('#palco').clientWidth - 4) / vp.width);

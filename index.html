@@ -23,6 +23,11 @@ h1 b{color:var(--brand)}
 .grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px}
 .ferr{display:flex;gap:12px;align-items:flex-start;padding:14px;background:var(--panel);border:1px solid var(--line);border-radius:14px;color:inherit;text-decoration:none;min-height:84px}
 .ferr:hover{border-color:var(--brand)}
+.busca{display:flex;align-items:center;gap:10px;margin:0 0 16px;padding:0 16px;min-height:48px;background:var(--panel);border:1px solid var(--line);border-radius:999px}
+.busca:focus-within{border-color:var(--focus);box-shadow:0 0 0 3px color-mix(in srgb,var(--focus) 25%,transparent)}
+.busca svg{width:18px;height:18px;flex:none;fill:none;stroke:var(--muted);stroke-width:2.2;stroke-linecap:round}
+.busca input{flex:1;min-width:0;border:0;background:transparent;color:inherit;font:inherit;font-size:16px;padding:12px 0;outline:none}
+.vazio{grid-column:1/-1;color:var(--muted);padding:12px 4px}
 .ferr .ic{flex:none;width:44px;height:44px;border-radius:12px;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,var(--c1),var(--c2))}
 .ferr .ic svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
 .ferr b{display:block;margin-bottom:2px}
@@ -40,6 +45,8 @@ h1 b{color:var(--brand)}
   <a class="voltar" id="voltar" href="./" hidden>‹ Ferramentas</a>
   <h1 id="titulo">Ferramentas <b>WiApps</b></h1>
   <p class="sub">Tudo roda no seu aparelho: os arquivos não são enviados a nenhum servidor.</p>
+  <label class="busca" id="busca"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+    <input id="q" type="search" placeholder="Buscar: juntar PDF, slump, cubicagem, DWG…" aria-label="Buscar nas ferramentas" enterkeyhint="search" autocomplete="off"></label>
   <div class="grade" id="grade"></div>
   <p class="rodape">Para instalar: no Chrome do celular, menu › “Instalar app”.</p>
 </main>
@@ -193,7 +200,36 @@ function cartao(href, f) {
   return a;
 }
 
+// busca: nome, descrição e grupo de cada ferramenta (sem acento, com um erro de digitação por palavra de 4+ letras)
+const sem = (s) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const quase = (a, b) => { if (Math.abs(a.length - b.length) > 1) return false; let i = 0, j = 0, d = 0;
+  while (i < a.length && j < b.length) { if (a[i] === b[j]) { i++; j++; continue; } if (++d > 1) return false;
+    if (a.length === b.length && a[i] === b[j + 1] && a[i + 1] === b[j]) { i += 2; j += 2; } else if (a.length > b.length) i++; else if (b.length > a.length) j++; else { i++; j++; } }
+  return d + (a.length - i) + (b.length - j) <= 1; };
+function nota(q, f) {
+  const g = GRUPOS.find((x) => x.id === f.grupo), t = sem(`${f.nome} ${f.desc} ${g ? g.nome : ''}`), ws = t.split(/[^a-z0-9]+/).filter(Boolean); let n = 0;
+  for (const p of sem(q).split(/\s+/).filter(Boolean)) {
+    if (sem(f.nome).includes(p)) n += 4; else if (ws.some((w) => w.startsWith(p))) n += 3; else if (t.includes(p)) n += 2;
+    else if (p.length >= 4 && ws.some((w) => quase(p, w) || quase(p, w.slice(0, p.length + 1)))) n += 1; else return 0;
+  }
+  return n;
+}
+const qBusca = document.getElementById('q');
+function buscar() {
+  const q = qBusca.value.trim(), grade = document.getElementById('grade');
+  if (q.length < 2) { grade.replaceChildren(...telaGrupos()); return; }
+  const achou = FERRAMENTAS.map((f) => [nota(q, f), f]).filter((x) => x[0]).sort((a, b) => b[0] - a[0]).map((x) => cartao(x[1].pasta, x[1]));
+  const n = document.createElement('a'); n.className = 'ferr'; n.href = 'normas/?q=' + encodeURIComponent(q);
+  n.innerHTML = '<span class="ic" style="--c1:#4E7A7E;--c2:#2F5D62"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg></span><span><b></b><small>Procurar também dentro dos cards das normas</small></span>';
+  n.querySelector('b').textContent = `“${q}” nas normas`;
+  const v = document.createElement('p'); v.className = 'vazio'; v.textContent = `Nenhuma ferramenta com “${q}”.`;
+  grade.replaceChildren(...(achou.length ? achou : [v]), n);
+}
+let tmBusca; qBusca.addEventListener('input', () => { clearTimeout(tmBusca); tmBusca = setTimeout(buscar, 120); });
+
 const grupo = GRUPOS.find((g) => g.id === new URLSearchParams(location.search).get('g'));
+const telaGrupos = () => grupo ? FERRAMENTAS.filter((f) => f.grupo === grupo.id).map((f) => cartao(f.pasta, f))
+  : GRUPOS.map((g) => { const fs = FERRAMENTAS.filter((f) => f.grupo === g.id); return cartao(fs.length === 1 ? fs[0].pasta : `./?g=${g.id}`, g); });
 if (grupo) {
   document.title = `${grupo.nome} · Ferramentas WiApps`;
   document.getElementById('titulo').textContent = grupo.nome;

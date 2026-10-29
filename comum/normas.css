@@ -1,7 +1,7 @@
 /* Normas em cards: cada card = desenho com os números da norma + uma linha "Na obra". Usa os tokens de base.css. */
 :root{
   --brand:#2F5D62; --conc:#d3d8d5; --conc2:#bfc6c2; --steel:#2f5d62; --steel-soft:#dcebea;
-  --acc:#c2410c; --acc-soft:#fbe6da; --good:#2e7d32; --warn:#b26a00; --bad:#b3261e; --code:#f1f4f3;
+  --acc:#b03a0a; --acc-soft:#fbe6da; --good:#2e7d32; --warn:#b26a00; --bad:#b3261e; --code:#f1f4f3;
   --agua:#3d8bd9; --agua-soft:#dbeafb; --terra:#c9a27a; --terra2:#a9825a;
 }
 @media (prefers-color-scheme:dark){:root{

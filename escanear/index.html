@@ -65,6 +65,7 @@
 <script>
 'use strict';
 const paginas = []; // {canvas} já endireitadas e com o acabamento
+let btWigo = null; // botão “Guardar no Wigo” (só dentro do Wigo)
 let atual = null;    // foto em edição: {img (canvas da foto), cantos: [[x,y]×4] na foto, filtro}
 const tela = F.$('#tela'), g = tela.getContext('2d');
 const MAX_FOTO = 2400, LARG_SAIDA = 1700;
@@ -221,9 +222,15 @@ function desenharLista() {
     return li;
   }));
   F.$('#opcoes').classList.toggle('hide', !paginas.length);
-  F.$('#gerar').disabled = F.$('#jpg').disabled = !paginas.length;
+  F.$('#gerar').disabled = F.$('#jpg').disabled = !paginas.length; if (btWigo) btWigo.disabled = !paginas.length;
   if (!atual) F.$('#drop').classList.remove('hide');
 }
+// aberto de dentro do Wigo: as páginas vão para as Fotos da obra, com o nome do arquivo como legenda
+btWigo = F.botaoWigo(F.$('#jpg'), async () => {
+  const fs = []; for (const [k, p] of paginas.entries()) fs.push({ nome: `${nomeArq()}${paginas.length > 1 ? '_p' + (k + 1) : ''}.jpg`, blob: await F.jpeg(p.canvas, 0.85) });
+  await F.paraWigo(fs, `Documento: ${nomeArq()}`);
+});
+if (btWigo) btWigo.disabled = true;
 const nomeArq = () => (F.$('#nome').value.trim() || `Documento_${new Date().toISOString().slice(0, 10)}`).replace(/[\\/:*?"<>|]+/g, '_');
 // OCR (Tesseract.js, português): carrega só quando pedido; os arquivos ficam no cache do aparelho
 let leitorOcr = null;

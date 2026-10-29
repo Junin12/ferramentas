@@ -1,6 +1,6 @@
 // Guarda as ferramentas no aparelho para abrir sem internet.
 // Ao alterar qualquer arquivo, suba o número da versão para os aparelhos receberem a atualização.
-const VERSAO = 'ferramentas-v21';
+const VERSAO = 'ferramentas-v22';
 // bibliotecas do cdnjs e do jsdelivr (versão fixa no endereço; o leitor de DWG tem ~10 MB): cache próprio, que sobrevive às atualizações
 const LIBS_CACHE = 'ferramentas-libs-1';
 const APP = ['./', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'comum/base.css', 'comum/base.js',

@@ -304,6 +304,8 @@ const NORMAS = (() => {
       requestAnimationFrame(() => alvo.scrollIntoView({ block: 'start' }));
     }
   }
+  // fórmulas largas rolam para o lado: com foco pelo teclado também (acessibilidade)
+  document.querySelectorAll('.f').forEach((e) => { if (!e.hasAttribute('tabindex')) e.tabIndex = 0; });
   if (!document.body.hasAttribute('data-busca')) iniciarPagina();
 
   return { sem, slug, lerFav, prepararCard };

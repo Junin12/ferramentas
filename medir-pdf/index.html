@@ -83,7 +83,7 @@ const st = { doc: null, nome: '', n: 1, page: null, z: 1, ferr: null, atual: [],
 const tela = F.$('#tela'), marcas = F.$('#marcas'), mg = marcas.getContext('2d');
 const N2 = (v, d = 2) => v.toLocaleString('pt-BR', { minimumFractionDigits: d, maximumFractionDigits: d });
 
-F.entrada(F.$('#drop'), F.$('#arq'), async (fs) => {
+const abrirArquivos = async (fs) => {
   const f = fs.find(F.ehPdf); if (!f) return F.toast('Escolha um arquivo PDF.', true);
   if (!F.libs('pdfjsLib')) return;
   try {
@@ -93,7 +93,10 @@ F.entrada(F.$('#drop'), F.$('#arq'), async (fs) => {
     F.$('#area').classList.remove('hide'); F.$('#drop').classList.add('hide');
     await abrirFolha(1);
   } catch (e) { F.toast(e.message || 'Não consegui abrir o PDF.', true); }
-});
+};
+F.entrada(F.$('#drop'), F.$('#arq'), abrirArquivos);
+// prancha mandada pelo Wigo (botão 📏 Medir no projeto)
+if (new URLSearchParams(location.search).get('doc') === 'wigo') F.doWigo().then((f) => { if (f) abrirArquivos([f]); }).catch(() => {});
 async function abrirFolha(n) {
   st.n = n; st.page = await st.doc.getPage(n); st.atual = [];
   const vp = st.page.getViewport({ scale: 1 }); st.z = Math.max(0.3, (F.$('#palco').clientWidth - 4) / vp.width);

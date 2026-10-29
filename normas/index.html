@@ -71,6 +71,7 @@ function mostrar() {
   tr.textContent = !res.length ? 'Nenhum card com essas palavras' : res.length > MAX ? `Resultados (${MAX} de ${res.length}: refine a busca)` : `Resultados (${res.length})`;
 }
 
+{ const qq = new URLSearchParams(location.search).get('q'); if (qq) q.value = qq; }
 q.addEventListener('input', mostrar);
 // favoritar ou desfavoritar muda a lista de favoritos na hora
 document.addEventListener('click', (e) => { if (e.target.closest('.acao-card[aria-pressed]') &&!q.value.trim()) setTimeout(mostrar, 0); });

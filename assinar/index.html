@@ -33,7 +33,7 @@
 
   <section class="card">
     <h2>Assinatura</h2>
-    <div class="salvas" id="salvas" aria-label="Assinaturas guardadas"></div>
+    <div class="salvas" id="salvas" role="group" aria-label="Assinaturas guardadas"></div>
     <canvas id="pad" width="900" height="300" aria-label="Quadro para desenhar a assinatura"></canvas>
     <div class="row">
       <button type="button" id="limpar">Limpar</button>
@@ -153,6 +153,8 @@ F.$('#gerar').addEventListener('click', () => F.trabalhando(F.$('#gerar'), async
     F.baixar(await z.generateAsync({ type: 'blob' }), `PDFs_assinados_${new Date().toISOString().slice(0, 10)}.zip`);
   } else for (const s of saidas) F.baixar(new Blob([s.bytes], { type: 'application/pdf' }), s.nome);
   F.toast(`${saidas.length} PDF${saidas.length > 1 ? 's assinados' : ' assinado'}.`);
+  // aberto de dentro do Wigo: o PDF assinado também vai para as Fotos da obra (uma foto por página)
+  if (F.noWigo()) await F.paraWigo(saidas.map((s) => ({ nome: s.nome, blob: new Blob([s.bytes], { type: 'application/pdf' }) })), `Assinado: ${F.nomeBase(saidas[0].nome)}`);
   desenharSalvas();
 }));
 </script>

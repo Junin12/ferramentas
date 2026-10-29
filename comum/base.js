@@ -105,9 +105,35 @@ const F = (() => {
     const a = e.target.closest('a[href]');
     if (a && a.origin === location.origin && !a.target && !a.hasAttribute('download')) { e.preventDefault(); location.replace(a.href); }
   });
+  // ---------- troca de arquivos com o Wigo (mesmo endereço, wiapps.com.br): Cache "ferr-wigo" ----------
+  // /ferr-wigo/entrada/pdf = arquivo que o Wigo mandou abrir (ex.: Medir na prancha); /ferr-wigo/saida/<id> = arquivo que vai para as Fotos da obra.
+  // As chaves começam na raiz do site: uma chave relativa viraria outro endereço em cada página.
+  const WIGO_CACHE = 'ferr-wigo';
+  const noWigo = () => { try { return sessionStorage.getItem('ferr-de') === 'wigo' || new URLSearchParams(location.search).get('de') === 'wigo' || (window.parent !== window && typeof window.parent.wigoReceber === 'function'); } catch (e) { return false; } };
+  async function doWigo() {
+    if (!('caches' in window)) return null;
+    const c = await caches.open(WIGO_CACHE), r = await c.match('/ferr-wigo/entrada/pdf'); if (!r) return null;
+    const b = await r.blob(); await c.delete('/ferr-wigo/entrada/pdf');
+    return new File([b], decodeURIComponent(r.headers.get('X-Nome') || 'projeto.pdf'), { type: b.type || 'application/pdf' });
+  }
+  // arquivos: [{ nome, blob }] (JPG/PNG ou PDF). Devolve quantos foram entregues ao Wigo.
+  async function paraWigo(arquivos, legenda) {
+    const c = await caches.open(WIGO_CACHE), id = Date.now().toString(36);
+    for (const [k, a] of arquivos.entries()) await c.put(`/ferr-wigo/saida/${id}-${k}`, new Response(a.blob, { headers: { 'Content-Type': a.blob.type || 'application/octet-stream', 'X-Nome': encodeURIComponent(a.nome), 'X-Legenda': encodeURIComponent(legenda || a.nome) } }));
+    let n = 0; try { if (window.parent !== window && typeof window.parent.wigoReceber === 'function') n = await window.parent.wigoReceber(); } catch (e) { /* o Wigo pega quando abrir */ }
+    toast(n ? 'Guardado nas Fotos da obra do Wigo.' : 'Guardado. Vai para as Fotos da obra quando você abrir o Wigo neste celular.');
+    return arquivos.length;
+  }
+  // botão "Guardar no Wigo" (só aparece quando as ferramentas foram abertas de dentro do Wigo)
+  function botaoWigo(depoisDe, fazer) {
+    if (!noWigo() || !depoisDe) return null;
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'btn'; b.textContent = '📥 Guardar no Wigo';
+    b.addEventListener('click', () => trabalhando(b, fazer)); depoisDe.after(b); return b;
+  }
+
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
     navigator.serviceWorker.register('../sw.js').catch((e) => console.warn('SW não registrado', e));
   }
 
-  return { $, toast, baixar, libs, ehPdf, nomeBase, tamanho, bytesPdf, abrirPdfLib, intervalos, descreve, canvasDaPagina, jpeg, entrada, trabalhando };
+  return { $, toast, baixar, libs, ehPdf, nomeBase, tamanho, bytesPdf, abrirPdfLib, intervalos, descreve, canvasDaPagina, jpeg, entrada, trabalhando, noWigo, doWigo, paraWigo, botaoWigo };
 })();

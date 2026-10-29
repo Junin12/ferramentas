@@ -7,7 +7,7 @@ const Des = (() => {
   const C30 = Math.cos(Math.PI / 6), S30 = 0.5;
   const f = (n) => Math.round(n * 10) / 10;
   const pts = (l) => l.map((p) => f(p[0]) + ',' + f(p[1])).join(' ');
-  const svg = (w, h, corpo, rot = '') => `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" role="img"${rot ? ` aria-label="${rot}"` : ''}>${corpo}</svg>`;
+  const svg = (w, h, corpo, rot = '') => `<svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg" ${rot ? `role="img" aria-label="${rot}"` : 'aria-hidden="true"'}>${corpo}</svg>`;
   const txt = (x, y, t, o = {}) => `<text x="${f(x)}" y="${f(y)}" font-size="${o.tam || 10}" font-family="Arial,sans-serif" text-anchor="${o.al || 'middle'}" fill="${o.cor || 'var(--ink)'}"${o.neg ? ' font-weight="700"' : ''}${o.rot ? ` transform="rotate(${o.rot} ${f(x)} ${f(y)})"` : ''}>${t}</text>`;
   // números pseudoaleatórios fixos (o desenho sai sempre igual)
   const sorteio = (s) => () => { s = (s * 16807) % 2147483647; return (s - 1) / 2147483646; };

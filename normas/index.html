@@ -18,6 +18,11 @@
   <p class="aviso" id="info">Carregando as normas…</p>
   <h2 class="secao-tit" id="tit-fav" hidden>★ Favoritos</h2>
   <div class="grade" id="fav"></div>
+  <section id="mapa-geral">
+    <h2 class="secao-tit">🧠 Mapa das normas</h2>
+    <p class="aviso">Toque numa norma para abrir o mapa mental dela.</p>
+    <div id="mapa"></div>
+  </section>
   <h2 class="secao-tit" id="tit-res" hidden>Resultados</h2>
   <div class="grade" id="res"></div>
 </main>
@@ -29,6 +34,20 @@
 // Lê os cards de todas as páginas de normas (ficam guardados no aparelho pelo sw.js) e busca em todos de uma vez.
 const PAGINAS = ['nbr6118/', 'nbr12655/', 'nbr14931/', 'nbr15696/', 'nbr6120/', 'nbr6122/', 'nbr16868/', 'nbr7480/', 'nbr5738/', 'nbr16889/', 'nbr7211/',
   'nbr7182/', 'nbr6484/', 'nbr12266/', 'nbr9649/', 'nbr12218/', 'nr18/', 'nr35/', 'nr33/', 'nr6/', 'nbr15575/', 'nbr9050/'];
+// mapa geral: as mesmas áreas (e cores) da lista de normas na página inicial
+const AREAS = [
+  ['Concreto e estruturas', '#4f6b66', [['nbr6118/', 'NBR 6118 · Estruturas de concreto'], ['nbr12655/', 'NBR 12655 · Controle do concreto'], ['nbr14931/', 'NBR 14931 · Execução de concreto'],
+    ['nbr15696/', 'NBR 15696 · Fôrmas e escoramentos'], ['nbr6120/', 'NBR 6120 · Cargas'], ['nbr6122/', 'NBR 6122 · Fundações'], ['nbr16868/', 'NBR 16868 · Alvenaria estrutural'], ['nbr7480/', 'NBR 7480 · Aço para armaduras']]],
+  ['Ensaios e solos', '#7a5cd0', [['nbr5738/', 'NBR 5738 e 5739 · Corpos de prova'], ['nbr16889/', 'NBR 16889 · Slump'], ['nbr7211/', 'NBR 7211 · Agregados'],
+    ['nbr7182/', 'NBR 7182 e 9895 · Compactação e CBR'], ['nbr6484/', 'NBR 6484 e 8036 · Sondagem SPT']]],
+  ['Saneamento', 'var(--agua)', [['nbr12266/', 'NBR 12266 · Valas'], ['nbr9649/', 'NBR 9649 · Redes de esgoto'], ['nbr12218/', 'NBR 12218 · Rede de água']]],
+  ['Segurança do trabalho', 'var(--warn)', [['nr18/', 'NR-18 · Construção'], ['nr35/', 'NR-35 · Trabalho em altura'], ['nr33/', 'NR-33 · Espaço confinado'], ['nr6/', 'NR-6 · EPI']]],
+  ['Uso e desempenho', 'var(--good)', [['nbr15575/', 'NBR 15575 · Desempenho'], ['nbr9050/', 'NBR 9050 · Acessibilidade']]],
+];
+NORMAS.mapa(document.getElementById('mapa'), {
+  centro: { t: `${PAGINAS.length} normas em cards` },
+  ramos: AREAS.map(([t, cor, ns]) => ({ t, cor, folhas: ns.map(([pasta, nome]) => ({ t: nome, href: '../' + pasta + '#mapa' })) })),
+});
 const MAX = 40;
 const q = document.getElementById('q');
 let todos = [];
@@ -47,6 +66,8 @@ async function carregar() {
     const svg = card.querySelector('svg');
     const t = NORMAS.sem(norma + ' ' + card.textContent + ' ' + (svg ? svg.getAttribute('aria-label') || '' : ''));
     NORMAS.prepararCard(card, pasta, norma);
+    // números do card Resumo apontam para os cards da própria norma
+    card.querySelectorAll('a.ri').forEach((a) => a.setAttribute('href', '../' + pasta + a.getAttribute('href')));
     const ir = document.createElement('a');
     ir.className = 'origem';
     ir.href = '../' + pasta + '#' + card.id;
@@ -66,6 +87,7 @@ function mostrar() {
   document.getElementById('fav').replaceChildren(...fav.map((x) => x.card));
   document.getElementById('res').replaceChildren(...res.slice(0, MAX).map((x) => x.card));
   document.getElementById('tit-fav').hidden = !fav.length;
+  document.getElementById('mapa-geral').hidden = palavras.length > 0;
   const tr = document.getElementById('tit-res');
   tr.hidden = !palavras.length;
   tr.textContent = !res.length ? 'Nenhum card com essas palavras' : res.length > MAX ? `Resultados (${MAX} de ${res.length}: refine a busca)` : `Resultados (${res.length})`;

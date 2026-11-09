@@ -53,6 +53,145 @@ const NORMAS = (() => {
     env.addEventListener('click', () => enviar(card, norma, env));
     marcar();
     card.querySelectorAll('.calc[data-calc]').forEach(montarCalc);
+    card.querySelectorAll('.ri[data-i]').forEach((a) => {
+      if (!a.querySelector('svg')) a.insertAdjacentHTML('afterbegin', `<svg class="ill" viewBox="0 0 40 40" aria-hidden="true">${ICONES[a.dataset.i] || ''}</svg>`);
+    });
+  }
+
+  // ---------- card "Resumo": cada número leva um mini desenho (a.ri[data-i]) e abre o card dele ----------
+  const LINHA = 'style="fill:var(--panel);stroke:var(--ink);stroke-width:2.5"';
+  const ICONES = {
+    cobr: '<rect class="cc" x="4" y="4" width="32" height="32" rx="2"/><path class="est" d="M11 11h18v18H11z"/><circle class="fe" cx="15" cy="25" r="3"/><circle class="fe" cx="25" cy="25" r="3"/><path class="dim" d="M5 33h5"/>',
+    cp: '<path class="cc" d="M10 9v22a10 4 0 0 0 20 0V9z"/><ellipse class="cc2" cx="20" cy="9" rx="10" ry="4"/>',
+    curva: '<path class="acs" d="M3 34C12 34 13 8 20 8s8 26 17 26z"/><path class="ln" d="M3 34h34"/><path class="dim" d="M12 34V24"/>',
+    flecha: '<path class="lnb" d="M5 13Q20 26 35 13"/><path class="ink" d="M1 13h8l-4 6zM31 13h8l-4 6z"/><path class="dim" d="M20 6v13" marker-end="url(#sa)"/>',
+    fissura: '<rect class="cc" x="4" y="8" width="32" height="24" rx="2"/><path class="fis" stroke-width="2" d="M14 32l3-7-3-5 4-6M24 32l2-5-2-4"/>',
+    pilar: '<rect class="cc" x="12" y="3" width="16" height="34"/><path class="fio" d="M16 3v34M24 3v34"/><path class="tr" d="M12 12h16M12 21h16M12 30h16"/>',
+    viga: '<rect class="cc" x="3" y="11" width="34" height="14"/><path class="fio" d="M3 21h34"/><path class="ink" d="M5 25h6l-3 6zM29 25h6l-3 6z"/>',
+    laje: '<path class="cc" d="M2 12h36v8H2z"/><path class="lnb" d="M9 20v16M31 20v16"/>',
+    gota: '<path class="ag" d="M20 3C14 13 9 19 9 25a11 11 0 0 0 22 0c0-6-5-12-11-22z"/>',
+    tubo: '<circle cx="20" cy="20" r="14" class="ags" style="stroke:var(--agua);stroke-width:3"/><path class="ag" d="M7.4 26H32.6A14 14 0 0 1 7.4 26z"/>',
+    vala: '<path class="te" d="M1 11h10v24h18V11h10v27H1z"/><path class="ln" d="M11 11v24h18V11"/>',
+    escora: '<rect class="cc" x="3" y="5" width="34" height="6"/><path class="lnb" d="M10 11v25M30 11v25"/><path class="ln" d="M10 21l20 9M30 21l-20 9"/>',
+    relogio: `<circle cx="20" cy="20" r="15" ${LINHA}/><path class="lnb" d="M20 10v10l7 5"/>`,
+    termo: '<path class="ln" d="M17 24V7a3 3 0 0 1 6 0v17"/><path class="ac" d="M18.5 13h3v13h-3z"/><circle class="ac" cx="20" cy="29" r="6"/>',
+    peso: '<circle cx="20" cy="9" r="4" style="fill:none;stroke:var(--ink);stroke-width:2.5"/><path class="ink" d="M9 35l4-21h14l4 21z"/>',
+    cone: '<path class="cc" d="M11 33L15 8h10l4 25z"/><path class="lnb" d="M4 34h32"/>',
+    golpe: '<path class="cc" d="M11 35L15 14h10l4 21z"/><path class="lnb" d="M20 2v26"/>',
+    martelo: '<rect class="ink" x="10" y="3" width="16" height="11" rx="2"/><path class="lnb" d="M18 14v22"/><path class="dim" d="M32 5v14" marker-end="url(#sa)"/>',
+    peneira: '<ellipse class="cc2" cx="20" cy="12" rx="16" ry="5"/><path class="tr" d="M6 12h28M13 8v8M20 7v10M27 8v8"/><g class="te2"><circle cx="13" cy="27" r="2.5"/><circle cx="21" cy="33" r="2.5"/><circle cx="27" cy="25" r="2.5"/></g>',
+    brita: '<g class="cc2"><path d="M4 30l5-9 8 1 2 10-9 4z"/><path d="M20 22l7-8 8 4-1 9-9 2z"/><path d="M12 12l6-7 7 3-2 8-8 1z"/></g>',
+    solo: '<rect class="te" x="2" y="23" width="36" height="14"/><rect class="ink" x="12" y="5" width="16" height="10" rx="1"/><path class="lnb" d="M20 15v6"/><path class="tr" d="M2 30h36"/>',
+    pessoa: '<circle class="ink" cx="20" cy="7" r="4"/><path class="lnb" d="M20 13v12M11 18h18M20 25l-6 11M20 25l6 11"/>',
+    altura: '<path class="ink" d="M3 10h16v3H3z"/><circle class="ink" cx="11" cy="5" r="3"/><path class="dim" d="M30 8v26" marker-start="url(#sa)" marker-end="url(#sa)"/><path class="ln" d="M2 37h36"/>',
+    capacete: '<path class="wd" d="M7 26a13 13 0 0 1 26 0z"/><rect class="wd" x="3" y="25" width="34" height="5" rx="2.5"/><path class="ln" d="M20 13v7"/>',
+    gas: '<rect class="ink" x="11" y="4" width="18" height="32" rx="4"/><rect class="gd" x="14" y="8" width="12" height="10" rx="1"/><circle class="rd" cx="20" cy="27" r="3.5"/>',
+    cadeira: '<circle cx="17" cy="27" r="9" style="fill:none;stroke:var(--ink);stroke-width:2.5"/><circle class="ink" cx="17" cy="5" r="3"/><path class="lnb" d="M17 10v12h10l4 10"/>',
+    rampa: '<path class="cc" d="M3 35L33 18v17z"/><path class="dim" d="M37 18v17" marker-start="url(#sa)" marker-end="url(#sa)"/>',
+    porta: `<rect x="9" y="3" width="22" height="34" ${LINHA}/><path class="lnb" d="M24 20h4"/>`,
+    casa: '<path class="cc" d="M5 18L20 5l15 13v18H5z"/><rect class="pan" x="16" y="24" width="8" height="12"/>',
+    ruido: '<path class="ink" d="M4 15h7l9-8v26l-9-8H4z"/><path class="ln" d="M25 14a8 8 0 0 1 0 12M30 9a15 15 0 0 1 0 22"/>',
+    escada: '<path class="lnb" d="M12 36L18 4M28 36L34 4M13.5 28H29.5M15.4 18H31.4M16.9 10H32.9"/>',
+    cinto: '<path class="lnb" d="M20 37V20M20 20L9 4M20 20L31 4"/><circle class="ac" cx="20" cy="21" r="4"/><circle class="ink" cx="9" cy="4" r="2.5"/><circle class="ink" cx="31" cy="4" r="2.5"/>',
+    vibrador: '<path class="lnb" d="M6 3c6 4 2 8 9 12"/><rect class="ink" x="15" y="13" width="7" height="24" rx="3.5"/><path class="tr" d="M26 20h8M26 26h8M26 32h8"/>',
+    barra: '<path class="lnb" d="M4 31L36 9"/><path class="ln" d="M9 24l3 5M15 20l3 5M21 16l3 5M27 12l3 5"/>',
+    dobra: '<circle class="tr" cx="17" cy="15" r="6"/><path class="lnb" d="M7 37V15a10 10 0 0 1 20 0v8"/>',
+    caminhao: '<rect class="ink" x="2" y="13" width="22" height="15" rx="2"/><path class="ink" d="M24 17h7l6 7v4H24z"/><circle cx="9" cy="30" r="4" style="fill:var(--panel);stroke:var(--ink);stroke-width:2"/><circle cx="30" cy="30" r="4" style="fill:var(--panel);stroke:var(--ink);stroke-width:2"/>',
+    pressao: `<circle cx="20" cy="22" r="14" ${LINHA}/><path class="lnb" d="M20 22l7-7"/><path class="ln" d="M20 2v6"/>`,
+    doc: '<path d="M9 3h15l7 7v27H9z" style="fill:var(--panel);stroke:var(--ink);stroke-width:2"/><path class="ln" d="M13 16h14M13 22h14M13 28h9"/>',
+    calendario: '<rect x="5" y="8" width="30" height="28" rx="3" style="fill:var(--panel);stroke:var(--ink);stroke-width:2"/><path class="ink" d="M5 11a3 3 0 0 1 3-3h24a3 3 0 0 1 3 3v5H5z"/><path class="lnb" d="M13 3v7M27 3v7"/>',
+    parede: '<g class="cc2"><rect x="2" y="5" width="17" height="9"/><rect x="21" y="5" width="17" height="9"/><rect x="2" y="27" width="17" height="9"/><rect x="21" y="27" width="17" height="9"/></g><g class="cc"><rect x="11" y="16" width="18" height="9"/><rect x="2" y="16" width="7" height="9"/><rect x="31" y="16" width="7" height="9"/></g>',
+    bloco: '<rect class="cc2" x="3" y="10" width="34" height="20" rx="1"/><rect class="pan" x="7" y="14" width="11" height="12"/><rect class="pan" x="22" y="14" width="11" height="12"/>',
+    sapata: '<rect class="cc" x="16" y="3" width="8" height="19"/><path class="cc2" d="M5 26l11-4h8l11 4v6H5z"/><rect class="te" x="2" y="32" width="36" height="5"/>',
+    estaca: '<rect class="te" x="2" y="10" width="36" height="27"/><rect class="cc" x="15" y="3" width="10" height="34"/>',
+    escudo: '<path class="gd" d="M20 3l14 5v10c0 9-6 15-14 19C12 33 6 27 6 18V8z"/><path d="M13 19l5 5 9-10" style="fill:none;stroke:var(--panel);stroke-width:3.5;stroke-linecap:round;stroke-linejoin:round"/>',
+    guardacorpo: '<path class="lnb" d="M3 7h34M3 19h34M6 7v29M20 7v29M34 7v29"/><rect class="wd" x="3" y="30" width="34" height="6"/>',
+    ok: '<circle class="gd" cx="20" cy="20" r="16"/><path d="M12 20l6 6 10-11" style="fill:none;stroke:var(--panel);stroke-width:3.5;stroke-linecap:round;stroke-linejoin:round"/>',
+    alerta: '<path class="wd" d="M20 3l18 32H2z" style="stroke-linejoin:round"/><path d="M20 14v10M20 29v.5" style="fill:none;stroke:var(--panel);stroke-width:3.5;stroke-linecap:round"/>',
+    piso: '<rect class="wd" x="3" y="3" width="34" height="34" rx="3"/><g class="ink"><circle cx="11" cy="11" r="2.5"/><circle cx="20" cy="11" r="2.5"/><circle cx="29" cy="11" r="2.5"/><circle cx="11" cy="20" r="2.5"/><circle cx="20" cy="20" r="2.5"/><circle cx="29" cy="20" r="2.5"/><circle cx="11" cy="29" r="2.5"/><circle cx="20" cy="29" r="2.5"/><circle cx="29" cy="29" r="2.5"/></g>',
+    sanitario: '<path class="lnb" d="M10 4h8v12"/><path d="M6 16h28c0 8-6 13-10 13h-8c-4 0-10-5-10-13z" style="fill:var(--panel);stroke:var(--ink);stroke-width:2.5"/><path class="lnb" d="M15 29l-1 7h12l-1-7"/>',
+    regua: '<rect class="wd" x="2" y="13" width="36" height="14" rx="1"/><path class="ln" d="M8 13v6M14 13v8M20 13v6M26 13v8M32 13v6"/>',
+    pv: '<rect class="cc2" x="13" y="3" width="14" height="26"/><path class="ink" d="M11 3h18v3H11z"/><path class="agl" d="M1 31h38" style="stroke-width:4"/>',
+  };
+
+  // ---------- mapa mental: centro → ramos (temas) → folhas (cards) ----------
+  // dados = { centro: no, ramos: [{ ...no, folhas: [no] }] }; no = { t, href?, ir? } (ir = função no toque)
+  const CORES = ['var(--steel)', 'var(--acc)', 'var(--agua)', 'var(--good)', 'var(--warn)', 'var(--terra2)', 'var(--bad)', '#8a6be0'];
+  const NS = 'http://www.w3.org/2000/svg';
+
+  function mapa(el, dados) {
+    let largo = null, c = null, grupos = [];
+    const lig = document.createElementNS(NS, 'svg');
+    lig.setAttribute('class', 'mm-lig');
+    lig.setAttribute('aria-hidden', 'true');
+    const div = (cls) => { const d = document.createElement('div'); d.className = cls; return d; };
+    const no = (cls, item) => {
+      const a = document.createElement(item.href || item.ir ? 'a' : 'span');
+      a.className = 'mm-no ' + cls;
+      a.textContent = item.t;
+      if (item.href || item.ir) a.href = item.href || '#';
+      if (item.ir) a.addEventListener('click', (e) => { e.preventDefault(); item.ir(); });
+      return a;
+    };
+
+    function montar() {
+      largo = el.clientWidth >= 640;
+      el.className = 'mm' + (largo ? '' : ' vert');
+      const esq = div('mm-lado esq'), dir = div('mm-lado dir'), meio = div('mm-meio');
+      c = no('mm-c', dados.centro);
+      meio.append(c);
+      // no computador os temas vão para os dois lados, com mais ou menos o mesmo número de folhas
+      const pesos = dados.ramos.map((r) => r.folhas.length + 1);
+      const total = pesos.reduce((s, p) => s + p, 0);
+      let acum = 0;
+      grupos = dados.ramos.map((r, i) => {
+        const cor = r.cor || CORES[i % CORES.length];
+        const g = div('mm-g');
+        g.style.setProperty('--c', cor);
+        const rn = no('mm-r', r), fs = div('mm-fs');
+        r.folhas.forEach((f) => fs.append(no('mm-f', f)));
+        g.append(rn, fs);
+        const lado = largo && acum + pesos[i] / 2 > total / 2 ? esq : dir;
+        acum += pesos[i];
+        lado.append(g);
+        return { rn, fs, cor, esq: lado === esq };
+      });
+      el.replaceChildren(lig, esq, meio, dir);
+      ligar();
+    }
+
+    const curva = (x1, y1, x2, y2) => { const m = (x1 + x2) / 2; return `M${x1} ${y1}C${m} ${y1} ${m} ${y2} ${x2} ${y2}`; };
+    const cotovelo = (x, y1, x2, y2) => `M${x} ${y1}V${y2 - 8}Q${x} ${y2} ${x + 8} ${y2}H${x2}`;
+
+    function ligar() {
+      const b = el.getBoundingClientRect();
+      const W = el.scrollWidth, H = el.scrollHeight;
+      lig.setAttribute('width', W);
+      lig.setAttribute('height', H);
+      lig.setAttribute('viewBox', `0 0 ${W} ${H}`);
+      const r = (n) => { const q = n.getBoundingClientRect(); return { l: q.left - b.left, r: q.right - b.left, b: q.bottom - b.top, y: (q.top + q.bottom) / 2 - b.top }; };
+      const C = r(c), linhas = [];
+      const traco = (d, cor, w) => linhas.push(`<path d="${d}" style="fill:none;stroke:${cor};stroke-width:${w};stroke-linecap:round"/>`);
+      // no celular o tronco é um só: fica cinza e os ramos ganham a cor
+      grupos.forEach(({ rn, fs, cor, esq }) => {
+        const R = r(rn);
+        if (largo) traco(curva(esq ? C.l : C.r, C.y, esq ? R.r : R.l, R.y), cor, 2.5);
+        else traco(cotovelo(C.l + 14, C.b, R.l, R.y), 'var(--muted)', 2);
+        [...fs.children].forEach((f) => {
+          const F = r(f);
+          if (largo) traco(curva(esq ? R.l : R.r, R.y, esq ? F.r : F.l, F.y), cor, 1.5);
+          else traco(cotovelo(R.l + 12, R.b, F.l, F.y), cor, 1.5);
+        });
+      });
+      lig.innerHTML = linhas.join('');
+    }
+
+    new ResizeObserver(() => {
+      if (!el.clientWidth) return;
+      if ((el.clientWidth >= 640) !== largo) montar();
+      else ligar();
+    }).observe(el);
+    montar();
   }
 
   // ---------- enviar o card como imagem (WhatsApp, e-mail…) ----------
@@ -268,8 +407,8 @@ const NORMAS = (() => {
       c._tema = c.querySelector('.tag').textContent.trim();
     });
 
-    // um botão por tema, na ordem em que aparecem
-    const temas = ['Todos', ...new Set(cards.map((c) => c._tema))];
+    // um botão por tema, na ordem em que aparecem (o card Resumo só aparece em "Todos")
+    const temas = ['Todos', ...new Set(cards.filter((c) => !c.classList.contains('resumo')).map((c) => c._tema))];
     const chips = temas.map((t, i) => {
       const b = document.createElement('button');
       b.type = 'button';
@@ -290,14 +429,66 @@ const NORMAS = (() => {
       });
       document.getElementById('vazio').classList.toggle('hide', n > 0);
     }
-    chips.forEach((b) => b.addEventListener('click', () => {
-      tema = b.textContent;
-      chips.forEach((x) => x.setAttribute('aria-pressed', x === b ? 'true' : 'false'));
+    const escolherTema = (t) => {
+      tema = t;
+      chips.forEach((x) => x.setAttribute('aria-pressed', x.textContent === t ? 'true' : 'false'));
       filtrar();
-    }));
+    };
+    chips.forEach((b) => b.addEventListener('click', () => escolherTema(b.textContent)));
     q.addEventListener('input', filtrar);
 
-    // aberto por um link para um card (ex.: nbr12655/#formacao-de-lotes): destaca e rola até ele
+    // ---------- mapa mental da norma, montado com os cards da página ----------
+    const btnMapa = document.createElement('button');
+    btnMapa.type = 'button';
+    btnMapa.className = 'btn-mapa';
+    btnMapa.textContent = '🧠 Mapa mental';
+    q.parentNode.prepend(btnMapa);
+    let tela = null;
+    const irPara = (card) => {
+      fecharMapa();
+      q.value = '';
+      escolherTema('Todos');
+      cards.forEach((c) => c.classList.toggle('alvo', c === card));
+      history.replaceState(null, '', '#' + card.id);
+      card.scrollIntoView({ block: 'start' });
+    };
+    function abrirMapa() {
+      if (!tela) {
+        tela = document.createElement('div');
+        tela.className = 'mm-tela';
+        tela.setAttribute('role', 'dialog');
+        tela.setAttribute('aria-modal', 'true');
+        tela.setAttribute('aria-label', 'Mapa mental da ' + norma);
+        tela.innerHTML = '<div class="mm-topo"><b></b><span class="aviso">Toque num item para abrir o card</span><button type="button">✕ Fechar</button></div><div class="mm-corpo"><div></div></div>';
+        tela.querySelector('b').textContent = '🧠 ' + norma;
+        tela.querySelector('button').addEventListener('click', fecharMapa);
+        document.body.append(tela);
+        const ramos = new Map();
+        cards.filter((c) => !c.classList.contains('resumo')).forEach((c) => {
+          if (!ramos.has(c._tema)) ramos.set(c._tema, []);
+          ramos.get(c._tema).push({ t: c.querySelector('h2').textContent, href: '#' + c.id, ir: () => irPara(c) });
+        });
+        const resumo = cards.find((c) => c.classList.contains('resumo'));
+        mapa(tela.querySelector('.mm-corpo > div'), {
+          centro: { t: norma, ir: resumo ? () => irPara(resumo) : fecharMapa },
+          ramos: [...ramos].map(([t, folhas]) => ({ t, folhas, ir: () => { fecharMapa(); q.value = ''; escolherTema(t); scrollTo(0, 0); } })),
+        });
+      }
+      tela.hidden = false;
+      document.body.classList.add('mm-aberto');
+      tela.querySelector('button').focus();
+    }
+    function fecharMapa() {
+      if (!tela || tela.hidden) return;
+      tela.hidden = true;
+      document.body.classList.remove('mm-aberto');
+      if (location.hash === '#mapa') history.replaceState(null, '', location.pathname + location.search);
+    }
+    btnMapa.addEventListener('click', abrirMapa);
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') fecharMapa(); });
+
+    // aberto por um link para um card (ex.: nbr12655/#formacao-de-lotes): destaca e rola até ele; #mapa abre o mapa mental
+    if (location.hash === '#mapa') abrirMapa();
     const alvo = location.hash && document.getElementById(decodeURIComponent(location.hash.slice(1)));
     if (alvo && alvo.classList.contains('cn')) {
       alvo.classList.add('alvo');
@@ -308,5 +499,5 @@ const NORMAS = (() => {
   document.querySelectorAll('.f').forEach((e) => { if (!e.hasAttribute('tabindex')) e.tabIndex = 0; });
   if (!document.body.hasAttribute('data-busca')) iniciarPagina();
 
-  return { sem, slug, lerFav, prepararCard };
+  return { sem, slug, lerFav, prepararCard, mapa };
 })();

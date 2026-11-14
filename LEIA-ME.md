@@ -22,3 +22,15 @@ veja `documentos/LICENCAS_E_VENDA.md` na pasta do Wigo (OneDrive).
 ## SINAPI Analítico
 A Consulta SINAPI aceita também a planilha Analítico da Caixa (composições com os coeficientes). Cada base guarda, por composição,
 as horas de mão de obra por unidade (`coef[código].mo`), lidas pelo Wigo no cronograma e nos Insights.
+
+<!-- manutencao:inicio -->
+## Manutenção (resumo)
+
+> Resumo para manter o app. Atualizado em 14/11/2026. Visão de todos os apps: https://wiapps.com.br/documentacao/ (com senha).
+
+- **O que faz:** Ferramentas que rodam no próprio aparelho: PDF, imagens, QR, medir na prancha, DWG, SINAPI, normas e NRs.
+- **No ar:** https://wiapps.com.br/ferramentas/
+- **Rodar no PC:** node tests/smoke.cjs
+- **Publicar:** Vai ao ar pelo repositório wiapps-site (pasta ferramentas/, publica sozinho). Os dois repositórios estão iguais na v24 (09/11/2026).
+- **Chaves e senhas:** Não usa chave: tudo roda no navegador. Nunca coloque o valor de uma chave neste arquivo.
+<!-- manutencao:fim -->
